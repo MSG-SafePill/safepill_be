@@ -18,10 +18,14 @@ public class IntakeLog extends TimeStamped {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "actual_time", nullable = false)
+    @Column(name = "actual_time")
     private LocalDateTime actualTime;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     private IntakeStatus status;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "schedule_id", nullable = false)
+    private IntakeSchedule intakeSchedule;
 }

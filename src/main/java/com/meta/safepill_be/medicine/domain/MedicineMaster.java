@@ -1,6 +1,5 @@
 package com.meta.safepill_be.medicine.domain;
 
-import com.meta.safepill_be.common.domain.TimeStamped;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -8,12 +7,15 @@ import lombok.Setter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Getter
 @Setter
 @NoArgsConstructor
 @Entity
 @Table(name = "medicine_master")
-public class MedicineMaster extends TimeStamped {
+public class MedicineMaster {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -36,4 +38,7 @@ public class MedicineMaster extends TimeStamped {
 
     @Column(columnDefinition = "TEXT", nullable = false)
     private String precautions;
+
+    @OneToMany(mappedBy = "medicineMaster", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<MedicineIngredient> ingredient = new ArrayList<>();
 }

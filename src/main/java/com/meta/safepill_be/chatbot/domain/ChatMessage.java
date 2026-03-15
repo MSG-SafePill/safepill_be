@@ -22,4 +22,8 @@ public class ChatMessage extends TimeStamped {
     @Column(name = "sender_role")
     @Enumerated(EnumType.STRING)
     private SenderRole sender_role;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "session_id", nullable = false)
+    private ChatSession chatSession;
 }

@@ -1,6 +1,5 @@
 package com.meta.safepill_be.medicine.domain;
 
-import com.meta.safepill_be.common.domain.TimeStamped;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -13,7 +12,7 @@ import java.math.BigDecimal;
 @NoArgsConstructor
 @Entity
 @Table(name = "ingredient_master")
-public class IngredientMaster extends TimeStamped {
+public class IngredientMaster {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

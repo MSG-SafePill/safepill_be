@@ -1,5 +1,7 @@
 package com.meta.safepill_be.user.domain;
 
+import com.meta.safepill_be.cabinet.domain.UserMedicationReg;
+import com.meta.safepill_be.chatbot.domain.ChatSession;
 import com.meta.safepill_be.common.domain.TimeStamped;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -7,6 +9,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 
 @Getter
 @Setter
@@ -43,4 +47,13 @@ public class User extends TimeStamped {
 
     @Column(name = "birth_date", nullable = false)
     private LocalDate birthDate;
+
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<UserMedicationReg> medicationList = new ArrayList<>();
+
+    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private HealthProfile healthProfile;
+
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<ChatSession> chatSessions = new ArrayList<>();
 }

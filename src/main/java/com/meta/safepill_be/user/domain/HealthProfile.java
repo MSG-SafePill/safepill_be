@@ -1,6 +1,5 @@
 package com.meta.safepill_be.user.domain;
 
-import com.meta.safepill_be.common.domain.TimeStamped;
 import com.meta.safepill_be.medicine.domain.CustomGuideInfo;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -14,7 +13,7 @@ import org.hibernate.type.SqlTypes;
 @NoArgsConstructor
 @Entity
 @Table(name = "health_profile")
-public class HealthProfile extends TimeStamped {
+public class HealthProfile {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -28,4 +27,8 @@ public class HealthProfile extends TimeStamped {
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "custom_guide", columnDefinition = "json")
     private CustomGuideInfo customGuide;
+
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false, unique = true)
+    private User user;
 }
