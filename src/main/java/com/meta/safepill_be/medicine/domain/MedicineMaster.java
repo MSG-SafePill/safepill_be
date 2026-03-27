@@ -1,9 +1,7 @@
 package com.meta.safepill_be.medicine.domain;
 
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -11,8 +9,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Getter
-@Setter
-@NoArgsConstructor
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor
+@Builder
 @Entity
 @Table(name = "medicine_master")
 public class MedicineMaster {
@@ -39,6 +38,7 @@ public class MedicineMaster {
     @Column(columnDefinition = "TEXT", nullable = false)
     private String precautions;
 
+    @Builder.Default
     @OneToMany(mappedBy = "medicineMaster", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<MedicineIngredient> ingredient = new ArrayList<>();
 }
