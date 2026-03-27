@@ -1,15 +1,16 @@
 package com.meta.safepill_be.medicine.domain;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 
 import java.math.BigDecimal;
 
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 @Getter
-@Setter
-@NoArgsConstructor
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor
+@Builder
 @Entity
 @Table(name = "ingredient_master")
 public class IngredientMaster {

@@ -19,6 +19,12 @@ public class MedicineController {
         return ResponseEntity.ok("✅ 의약품 공공데이터 10개 동기화 완료!");
     }
 
+    @PostMapping("/sync-ingredients")
+    public ResponseEntity<String> syncIngredients() {
+        medicineService.fetchAndSaveIngredients();
+        return ResponseEntity.ok("✅ 의약품 성분 데이터 동기화 완료!");
+    }
+
     @GetMapping
     public ResponseEntity<List<MedicineMaster>> getAllMedicines() {
         List<MedicineMaster> medicines = medicineService.getAllMedicines();
