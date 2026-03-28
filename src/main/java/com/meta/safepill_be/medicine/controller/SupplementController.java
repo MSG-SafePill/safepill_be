@@ -17,4 +17,10 @@ public class SupplementController {
         supplementService.fetchAndSaveSupplements();
         return ResponseEntity.ok("✅ 영양제 데이터 수집 API 호출 완료!");
     }
+
+    @PostMapping("/sync-limits")
+    public ResponseEntity<String> syncIngredientLimits() {
+        supplementService.fetchAndUpdateIngredientLimits();
+        return ResponseEntity.ok("✅ 상한량 데이터 수집 완료!");
+    }
 }

@@ -21,7 +21,7 @@ public class IngredientMaster {
     @Column(name = "ingredient_name", nullable = false)
     private String ingredientName;
 
-    @Column(name = "upper_limit", precision = 5, scale = 2)
+    @Column(name = "upper_limit", precision = 10, scale = 2)
     private BigDecimal upperLimit;
 
     @Column(name = "unit", length = 20)
@@ -32,4 +32,9 @@ public class IngredientMaster {
 
     @Column(name = "intake_tip")
     private String intakeTip;
+
+    public void updateLimitAndUnit(BigDecimal upperLimit, String unit) {
+        this.upperLimit = upperLimit;
+        this.unit = unit;
+    }
 }
