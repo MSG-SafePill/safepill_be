@@ -32,10 +32,22 @@ public class MedicineMaster {
     @Column(name = "appearance_info", columnDefinition = "json")
     private AppearanceInfo appearanceInfo;
 
+    @Column(columnDefinition = "TEXT")
+    private String efficacy;
+
+    @Column(columnDefinition = "TEXT")
+    private String useMethod;
+
     @Column(columnDefinition = "TEXT", nullable = false)
     private String precautions;
 
     @Builder.Default
     @OneToMany(mappedBy = "medicineMaster", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<MedicineIngredient> ingredients = new ArrayList<>();
+
+    public void updateDetails(String efficacy, String useMethod, String precautions) {
+        this.efficacy = efficacy;
+        this.useMethod = useMethod;
+        this.precautions = precautions;
+    }
 }

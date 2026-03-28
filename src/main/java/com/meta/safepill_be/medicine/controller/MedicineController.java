@@ -25,6 +25,12 @@ public class MedicineController {
         return ResponseEntity.ok("✅ 의약품 성분 데이터 동기화 완료!");
     }
 
+    @PostMapping("/sync-precautions")
+    public ResponseEntity<String> syncPrecautions() {
+        medicineService.fetchAndUpdatePrecautions();
+        return ResponseEntity.ok("✅ 의약품 주의사항 데이터 동기화 완료!");
+    }
+
     @GetMapping
     public ResponseEntity<List<MedicineMaster>> getAllMedicines() {
         List<MedicineMaster> medicines = medicineService.getAllMedicines();

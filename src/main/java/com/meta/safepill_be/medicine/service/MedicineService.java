@@ -6,6 +6,7 @@ import com.meta.safepill_be.medicine.domain.MedicineIngredient;
 import com.meta.safepill_be.medicine.domain.MedicineMaster;
 import com.meta.safepill_be.medicine.dto.IngredientResponseDto;
 import com.meta.safepill_be.medicine.dto.MedicineResponseDto;
+import com.meta.safepill_be.medicine.dto.PrecautionResponseDto;
 import com.meta.safepill_be.medicine.repository.IngredientMasterRepository;
 import com.meta.safepill_be.medicine.repository.MedicineMasterRepository;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +36,9 @@ public class MedicineService {
 
     @Value("${open-api.data-go-kr.endpoint.medicine-ingredient}")
     private String medicineIngredientEndpoint;
+
+    @Value("${open-api.data-go-kr.endpoint.medicine-precaution}")
+    private String  medicinePrecautionEndpoint;
 
     @Transactional
     public void fetchMedicineDataFromApi() {
@@ -168,6 +172,86 @@ public class MedicineService {
             }
         }
         System.out.println("🎉 모든 성분 동기화 완료!");
+    }
+
+    @Transactional
+    public void fetchAndUpdatePrecautions() {
+        List<MedicineMaster> medicines = medicineMasterRepository.findAll();
+
+        DefaultUriBuilderFactory factory = new DefaultUriBuilderFactory(baseUrl);
+        factory.setEncodingMode(DefaultUriBuilderFactory.EncodingMode.VALUES_ONLY);
+        WebClient webClient = WebClient.builder().uriBuilderFactory(factory).build();
+
+        System.out.println("🚀 주의사항(Precautions) 데이터 업데이트를 시작합니다...");
+
+        for (MedicineMaster medicine : medicines) {
+            try {
+                PrecautionResponseDto response = webClient.get()
+                        .uri(uriBuilder -> uriBuilder
+                                .path(medicinePrecautionEndpoint)
+                                .queryParam("serviceKey", serviceKey)
+                                .queryParam("pageNo", "1")
+                                .queryParam("numOfRows", "3") // 주의사항은 보통 1개면 충분하므로 작게 잡습니다.
+                                .queryParam("type", "json")
+                                .queryParam("item_seq", medicine.getItemSeq())
+                                .build())
+                        .retrieve()
+                        .bodyToMono(PrecautionResponseDto.class)
+                        .block();
+
+                if (response != null && response.getBody() != null && response.getBody().getItems() != null) {
+                    List<PrecautionResponseDto.Item> items = response.getBody().getItems();
+
+                    if (!items.isEmpty()) {
+                        PrecautionResponseDto.Item precautionItem = items.get(0);
+                        String rawEfficacy = precautionItem.getEfficacy();
+                        String rawUseMethod = precautionItem.getUseMethod();
+                        String rawPrecautions = precautionItem.getPrecautions();
+
+                        if ((rawEfficacy != null && !rawEfficacy.trim().isEmpty()) ||
+                                (rawUseMethod != null && !rawUseMethod.trim().isEmpty()) ||
+                                (rawPrecautions != null && !rawPrecautions.trim().isEmpty())) {
+
+                            String cleanedEfficacy = cleanXmlText(rawEfficacy);
+                            String cleanedUseMethod = cleanXmlText(rawUseMethod);
+                            String cleanedPrecautions = cleanXmlText(rawPrecautions);
+
+                            medicine.updateDetails(cleanedEfficacy, cleanedUseMethod, cleanedPrecautions);
+                            medicineMasterRepository.save(medicine);
+
+                            System.out.println("✅ [" + medicine.getMedicineName() + "] 상세정보(효능/용법/주의사항) 업데이트 완료!");
+                        } else {
+                            System.out.println("⚠️ [" + medicine.getMedicineName() + "] 상세정보 텍스트가 모두 비어있습니다.");
+                        }
+                    }
+                } else {
+                    System.out.println("⚠️ [" + medicine.getMedicineName() + "] API 응답에 데이터가 없습니다.");
+                }
+                Thread.sleep(500);
+
+            } catch (Exception e) {
+                System.out.println("❌ 에러 발생 (" + medicine.getMedicineName() + "): " + e.getMessage());
+            }
+        }
+        System.out.println("🎉 모든 주의사항 데이터 동기화 완료!");
+    }
+
+    private String cleanXmlText(String rawText) {
+        if (rawText == null || rawText.isEmpty()) {
+            return "";
+        }
+
+        String cleaned = rawText;
+        cleaned = cleaned.replace("<![CDATA[", "").replace("]]>", "");
+        cleaned = cleaned.replaceAll("<ARTICLE title=\"([^\"]*)\">", "\n\n[$1]\n");
+        cleaned = cleaned.replaceAll("<[^>]+>", "");
+        cleaned = cleaned.replace("&#x2981;", "• ");
+        cleaned = cleaned.replaceAll("\n{3,}", "\n\n");
+        cleaned = cleaned.replace("\r", "");
+        cleaned = cleaned.replaceAll("\\n\\s+", "\n");
+        cleaned = cleaned.replace("[]\n", "").replace("[]", "");
+
+        return cleaned.trim();
     }
 
     public List<MedicineMaster> getAllMedicines() {
