@@ -6,5 +6,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.Optional;
 
 public interface SupplementMasterRepository extends JpaRepository<SupplementMaster, Long> {
-    Optional<SupplementMaster> findByPrdlstReportNo(String prdlstReportNo);
+    Optional<SupplementMaster> findByItemSeq(String itemSeq);
 }

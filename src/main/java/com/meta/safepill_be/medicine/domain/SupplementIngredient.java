@@ -1,13 +1,14 @@
 package com.meta.safepill_be.medicine.domain;
 
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.math.BigDecimal;
 
 @Getter
 @NoArgsConstructor
+@AllArgsConstructor
+@Builder
 @Entity
 @Table(name = "supplement_ingredient")
 public class SupplementIngredient {
