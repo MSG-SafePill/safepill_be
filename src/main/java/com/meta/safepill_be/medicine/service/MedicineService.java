@@ -66,7 +66,6 @@ public class MedicineService {
                             .itemSeq(item.getItemSeq())
                             .medicineName(item.getMedicineName())
                             .medicineManufacturer(item.getMedicineManufacturer())
-                            .ingredients("")
                             .precautions("")
                             .build();
 
@@ -141,7 +140,7 @@ public class MedicineService {
                                 .dosage(parsedDosage)
                                 .build();
 
-                        medicine.getIngredient().add(medicineIngredient);
+                        medicine.getIngredients().add(medicineIngredient);
                     }
 
                     medicineMasterRepository.save(medicine);

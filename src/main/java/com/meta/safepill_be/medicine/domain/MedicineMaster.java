@@ -28,9 +28,6 @@ public class MedicineMaster {
     @Column(name = "medicine_manufacturer", nullable = false)
     private String medicineManufacturer;
 
-    @Column(columnDefinition = "TEXT", nullable = false)
-    private String ingredients;
-
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "appearance_info", columnDefinition = "json")
     private AppearanceInfo appearanceInfo;
@@ -40,5 +37,5 @@ public class MedicineMaster {
 
     @Builder.Default
     @OneToMany(mappedBy = "medicineMaster", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<MedicineIngredient> ingredient = new ArrayList<>();
+    private List<MedicineIngredient> ingredients = new ArrayList<>();
 }
