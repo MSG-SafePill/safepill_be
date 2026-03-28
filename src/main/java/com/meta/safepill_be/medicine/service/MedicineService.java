@@ -1,5 +1,6 @@
 package com.meta.safepill_be.medicine.service;
 
+import com.meta.safepill_be.medicine.domain.AppearanceInfo;
 import com.meta.safepill_be.medicine.domain.IngredientMaster;
 import com.meta.safepill_be.medicine.domain.MedicineIngredient;
 import com.meta.safepill_be.medicine.domain.MedicineMaster;
@@ -62,10 +63,22 @@ public class MedicineService {
             List<MedicineResponseDto.Item> items = response.getBody().getItems();
             for (MedicineResponseDto.Item item : items) {
                 if (medicineMasterRepository.findByItemSeq(item.getItemSeq()).isEmpty()) {
+                    AppearanceInfo appearance = AppearanceInfo.builder()
+                            .shape(item.getShape())
+                            .color(item.getColor())
+                            .formulation(item.getFormulation())
+                            .imageUrl(item.getImageUrl())
+                            .lineFront(item.getLineFront())
+                            .lineBack(item.getLineBack())
+                            .printFront(item.getPrintFront())
+                            .printBack(item.getPrintBack())
+                            .build();
+
                     MedicineMaster medicine = MedicineMaster.builder()
                             .itemSeq(item.getItemSeq())
                             .medicineName(item.getMedicineName())
                             .medicineManufacturer(item.getMedicineManufacturer())
+                            .appearanceInfo(appearance)
                             .precautions("")
                             .build();
 

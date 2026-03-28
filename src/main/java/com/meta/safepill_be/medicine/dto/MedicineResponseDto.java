@@ -29,7 +29,28 @@ public class MedicineResponseDto {
         @JsonProperty("ENTP_NAME")
         private String medicineManufacturer;
 
+        @JsonProperty("DRUG_SHAPE")
+        private String shape;
+
+        @JsonProperty("COLOR_CLASS1")
+        private String color;
+
         @JsonProperty("CHART")
-        private String chart;
+        private String formulation;
+
+        @JsonProperty("ITEM_IMAGE")
+        private String imageUrl;
+
+        @JsonProperty("LINE_FRONT")
+        private String lineFront;
+
+        @JsonProperty("LINE_BACK")
+        private String lineBack;
+
+        @JsonProperty("PRINT_FRONT")
+        private String printFront;
+
+        @JsonProperty("PRINT_BACK")
+        private String printBack;
     }
 }
