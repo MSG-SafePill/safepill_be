@@ -1,5 +1,6 @@
 package com.meta.safepill_be.medicine.domain;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -18,6 +19,7 @@ public class SupplementIngredient {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "supplement_id", nullable = false)
+    @JsonIgnore
     private SupplementMaster supplementMaster;
 
     @ManyToOne(fetch = FetchType.LAZY)
