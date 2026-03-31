@@ -236,14 +236,26 @@ public class MedicineService {
         String cleaned = rawText;
         cleaned = cleaned.replace("<![CDATA[", "").replace("]]>", "");
         cleaned = cleaned.replaceAll("<ARTICLE title=\"([^\"]*)\">", "\n\n[$1]\n");
-        cleaned = cleaned.replaceAll("<[^>]+>", "");
+        cleaned = cleaned.replaceAll("<[^>]+>", ""); // 나머지 껍데기 태그 싹 다 지우기
         cleaned = cleaned.replace("&#x2981;", "• ");
-        cleaned = cleaned.replaceAll("\n{3,}", "\n\n");
+        cleaned = cleaned.replace("&lt;", "<");   // 작다 기호 복구
+        cleaned = cleaned.replace("&gt;", ">");   // 크다 기호 복구
+        cleaned = cleaned.replace("&amp;", "&");  // 앤드 기호 복구
+        cleaned = cleaned.replace("&quot;", "\""); // 쌍따옴표 복구
+        cleaned = cleaned.replace("&apos;", "'");  // 홑따옴표 복구
+        cleaned = cleaned.replace("&nbsp;", " ");  // 빈칸 기호 복구
+        cleaned = cleaned.replace("\r\n", "\n"); // 윈도우식 줄바꿈을 표준(\n)으로 통일
         cleaned = cleaned.replace("\r", "");
-        cleaned = cleaned.replaceAll("\\n\\s+", "\n");
+        cleaned = cleaned.replaceAll("\n{3,}", "\n\n"); // 엔터 3번 이상 친 곳은 2번으로 압축!
         cleaned = cleaned.replace("[]\n", "").replace("[]", "");
         String result = cleaned.trim();
         return result.isEmpty() ? "정보 없음" : result;
+    }
+
+    @Transactional(readOnly = true)
+    public MedicineMaster getMedicineDetail(Long id) {
+        return medicineMasterRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("해당 약품을 찾을 수 없습니다. ID: " + id));
     }
 
     public List<MedicineMaster> getAllMedicines() {

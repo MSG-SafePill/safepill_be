@@ -1,11 +1,10 @@
 package com.meta.safepill_be.medicine.controller;
 
+import com.meta.safepill_be.medicine.domain.SupplementMaster;
 import com.meta.safepill_be.medicine.service.SupplementService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/supplements")
@@ -22,5 +21,11 @@ public class SupplementController {
     public ResponseEntity<String> syncIngredientLimits() {
         supplementService.fetchAndUpdateIngredientLimits();
         return ResponseEntity.ok("✅ 상한량 데이터 수집 완료!");
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<SupplementMaster> getSupplementDetail(@PathVariable Long id) {
+        SupplementMaster supplement = supplementService.getSupplementDetail(id);
+        return ResponseEntity.ok(supplement);
     }
 }

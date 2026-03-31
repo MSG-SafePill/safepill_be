@@ -36,4 +36,10 @@ public class MedicineController {
         List<MedicineMaster> medicines = medicineService.getAllMedicines();
         return ResponseEntity.ok(medicines);
     }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<MedicineMaster> getMedicineDetail(@PathVariable Long id) {
+        MedicineMaster medicine = medicineService.getMedicineDetail(id);
+        return ResponseEntity.ok(medicine);
+    }
 }

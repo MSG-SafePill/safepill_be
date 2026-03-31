@@ -201,4 +201,10 @@ public class SupplementService {
         }
         return rawUnit.trim();
     }
+
+    @Transactional(readOnly = true)
+    public SupplementMaster getSupplementDetail(Long id) {
+        return supplementMasterRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("해당 영양제를 찾을 수 없습니다. ID: " + id));
+    }
 }
