@@ -252,6 +252,12 @@ public class MedicineService {
         return result.isEmpty() ? "정보 없음" : result;
     }
 
+    @Transactional(readOnly = true)
+    public MedicineMaster getMedicineDetail(Long id) {
+        return medicineMasterRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("해당 약품을 찾을 수 없습니다. ID: " + id));
+    }
+
     public List<MedicineMaster> getAllMedicines() {
         return medicineMasterRepository.findAll();
     }
