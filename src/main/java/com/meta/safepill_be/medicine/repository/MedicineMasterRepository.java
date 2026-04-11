@@ -9,4 +9,5 @@ import java.util.Optional;
 public interface MedicineMasterRepository extends JpaRepository<MedicineMaster, Long> {
     Optional<MedicineMaster> findByItemSeq(String itemSeq);
     List<MedicineMaster> findByMedicineNameContaining(String medicineName);
+    List<MedicineMaster> findByEfficacyIsNull();
 }

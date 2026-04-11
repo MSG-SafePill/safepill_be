@@ -31,6 +31,12 @@ public class MedicineController {
         return ResponseEntity.ok("✅ 의약품 주의사항 데이터 동기화 완료!");
     }
 
+    @PostMapping("/sync-details")
+    public ResponseEntity<String> syncMedicineDetails() {
+        medicineService.syncDrugInfoDetails();
+        return ResponseEntity.ok("e약은요 상세 정보 동기화가 백그라운드에서 시작되었습니다.");
+    }
+
     @GetMapping
     public ResponseEntity<List<MedicineMaster>> getAllMedicines() {
         List<MedicineMaster> medicines = medicineService.getAllMedicines();

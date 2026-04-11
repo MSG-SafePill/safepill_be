@@ -4,6 +4,7 @@ import com.meta.safepill_be.medicine.domain.AppearanceInfo;
 import com.meta.safepill_be.medicine.domain.IngredientMaster;
 import com.meta.safepill_be.medicine.domain.MedicineIngredient;
 import com.meta.safepill_be.medicine.domain.MedicineMaster;
+import com.meta.safepill_be.medicine.dto.DrugInfoResponseDto;
 import com.meta.safepill_be.medicine.dto.IngredientResponseDto;
 import com.meta.safepill_be.medicine.dto.MedicineResponseDto;
 import com.meta.safepill_be.medicine.dto.PrecautionResponseDto;
@@ -18,6 +19,7 @@ import org.springframework.web.util.DefaultUriBuilderFactory;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -40,6 +42,9 @@ public class MedicineService {
 
     @Value("${open-api.data-go-kr.endpoint.medicine-precaution}")
     private String medicinePrecautionEndpoint;
+
+    @Value("${open-api.data-go-kr.endpoint.druginfo}")
+    private String drugInfoEndpoint;
 
     @Transactional
     public void fetchMedicineDataFromApi() {
@@ -243,17 +248,20 @@ public class MedicineService {
         String cleaned = rawText;
         cleaned = cleaned.replace("<![CDATA[", "").replace("]]>", "");
         cleaned = cleaned.replaceAll("<ARTICLE title=\"([^\"]*)\">", "\n\n[$1]\n");
-        cleaned = cleaned.replaceAll("<[^>]+>", ""); // 나머지 껍데기 태그 싹 다 지우기
+        cleaned = cleaned.replaceAll("(?i)<br\\s*/?>", "\n");
+        cleaned = cleaned.replaceAll("(?i)</p>", "\n");
+        cleaned = cleaned.replaceAll("<[^>]+>", "");
+        cleaned = cleaned.replace("NBSP", " ");
         cleaned = cleaned.replace("&#x2981;", "• ");
-        cleaned = cleaned.replace("&lt;", "<");   // 작다 기호 복구
-        cleaned = cleaned.replace("&gt;", ">");   // 크다 기호 복구
-        cleaned = cleaned.replace("&amp;", "&");  // 앤드 기호 복구
-        cleaned = cleaned.replace("&quot;", "\""); // 쌍따옴표 복구
-        cleaned = cleaned.replace("&apos;", "'");  // 홑따옴표 복구
-        cleaned = cleaned.replace("&nbsp;", " ");  // 빈칸 기호 복구
-        cleaned = cleaned.replace("\r\n", "\n"); // 윈도우식 줄바꿈을 표준(\n)으로 통일
+        cleaned = cleaned.replace("&lt;", "<");
+        cleaned = cleaned.replace("&gt;", ">");
+        cleaned = cleaned.replace("&amp;", "&");
+        cleaned = cleaned.replace("&quot;", "\"");
+        cleaned = cleaned.replace("&apos;", "'");
+        cleaned = cleaned.replace("&nbsp;", " ");
+        cleaned = cleaned.replace("\r\n", "\n");
         cleaned = cleaned.replace("\r", "");
-        cleaned = cleaned.replaceAll("\n{3,}", "\n\n"); // 엔터 3번 이상 친 곳은 2번으로 압축!
+        cleaned = cleaned.replaceAll("\n{3,}", "\n\n");
         cleaned = cleaned.replace("[]\n", "").replace("[]", "");
         String result = cleaned.trim();
         return result.isEmpty() ? "정보 없음" : result;
@@ -263,6 +271,48 @@ public class MedicineService {
     public MedicineMaster getMedicineDetail(Long id) {
         return medicineMasterRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("해당 약품을 찾을 수 없습니다. ID: " + id));
+    }
+
+    @Transactional
+    public void syncDrugInfoDetails() {
+        WebClient webClient = createWebClient();
+        System.out.println("🚀 'e약은요' 타겟팅 매칭 업데이트를 시작합니다...");
+        List<com.meta.safepill_be.medicine.domain.MedicineMaster> targetMedicines = medicineMasterRepository.findByEfficacyIsNull();
+        System.out.println("📊 빈칸을 채워야 할 약품 개수: " + targetMedicines.size() + "개");
+        int updateCount = 0;
+        for (com.meta.safepill_be.medicine.domain.MedicineMaster medicine : targetMedicines) {
+            String targetItemSeq = medicine.getItemSeq();
+            if (targetItemSeq == null || targetItemSeq.isEmpty()) continue;
+            try {
+                DrugInfoResponseDto response = webClient.get()
+                        .uri(uriBuilder -> uriBuilder
+                                .path(drugInfoEndpoint)
+                                .queryParam("serviceKey", serviceKey)
+                                .queryParam("type", "json")
+                                .queryParam("itemSeq", targetItemSeq)
+                                .build())
+                        .retrieve()
+                        .bodyToMono(DrugInfoResponseDto.class)
+                        .block();
+                if (response != null && response.getBody() != null && response.getBody().getItems() != null && !response.getBody().getItems().isEmpty()) {
+                    DrugInfoResponseDto.Item item = response.getBody().getItems().get(0);
+                    String combinedPrecautions = (item.getAtpnWarnQesitm() != null ? "[경고]\n" + item.getAtpnWarnQesitm() + "\n\n" : "")
+                            + (item.getAtpnQesitm() != null ? "[주의]\n" + item.getAtpnQesitm() : "");
+                    medicine.updateDetails(
+                            cleanXmlText(item.getEfcyQesitm()),
+                            cleanXmlText(item.getUseMethodQesitm()),
+                            cleanXmlText(combinedPrecautions)
+                    );
+                    updateCount++;
+                    System.out.println("✅ 매칭 성공: " + medicine.getMedicineName());
+                } else {
+                }
+                Thread.sleep(50);
+            } catch (Exception e) {
+                System.err.println("⚠️ 통신 에러 (" + medicine.getMedicineName() + "): " + e.getMessage());
+            }
+        }
+        System.out.println("🎉 타겟팅 수집 완료! 총 " + updateCount + "개의 약품이 새 생명을 얻었습니다!");
     }
 
     public List<MedicineMaster> getAllMedicines() {
