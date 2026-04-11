@@ -51,7 +51,7 @@ public class MedicineService {
                             .path(medicineIdentifyEndpoint)
                             .queryParam("serviceKey", serviceKey)
                             .queryParam("pageNo", "1")
-                            .queryParam("numOfRows", "10") // 10개만 테스트
+                            .queryParam("numOfRows", "500")
                             .queryParam("type", "json")
                             .build())
                     .retrieve()
@@ -193,7 +193,14 @@ public class MedicineService {
     private WebClient createWebClient() {
         DefaultUriBuilderFactory factory = new DefaultUriBuilderFactory(baseUrl);
         factory.setEncodingMode(DefaultUriBuilderFactory.EncodingMode.VALUES_ONLY);
-        return WebClient.builder().uriBuilderFactory(factory).build();
+        org.springframework.web.reactive.function.client.ExchangeStrategies strategies =
+                org.springframework.web.reactive.function.client.ExchangeStrategies.builder()
+                        .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(-1))
+                        .build();
+        return WebClient.builder()
+                .exchangeStrategies(strategies)
+                .uriBuilderFactory(factory)
+                .build();
     }
 
     private String getOrDefault(String text) {
