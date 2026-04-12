@@ -1,13 +1,11 @@
 package com.meta.safepill_be.medicine.service;
 
+import com.meta.safepill_be.common.service.GeminiService;
 import com.meta.safepill_be.medicine.domain.AppearanceInfo;
 import com.meta.safepill_be.medicine.domain.IngredientMaster;
 import com.meta.safepill_be.medicine.domain.MedicineIngredient;
 import com.meta.safepill_be.medicine.domain.MedicineMaster;
-import com.meta.safepill_be.medicine.dto.DrugInfoResponseDto;
-import com.meta.safepill_be.medicine.dto.IngredientResponseDto;
-import com.meta.safepill_be.medicine.dto.MedicineResponseDto;
-import com.meta.safepill_be.medicine.dto.PrecautionResponseDto;
+import com.meta.safepill_be.medicine.dto.*;
 import com.meta.safepill_be.medicine.repository.IngredientMasterRepository;
 import com.meta.safepill_be.medicine.repository.MedicineMasterRepository;
 import lombok.RequiredArgsConstructor;
@@ -24,10 +22,9 @@ import java.util.Optional;
 @Service
 @RequiredArgsConstructor
 public class MedicineService {
-
     private final MedicineMasterRepository medicineMasterRepository;
     private final IngredientMasterRepository ingredientMasterRepository;
-
+    private final GeminiService geminiService;
     @Value("${open-api.data-go-kr.base-url}")
     private String baseUrl;
 
@@ -306,6 +303,26 @@ public class MedicineService {
                     updateCount++;
                     System.out.println("✅ 매칭 성공: " + medicine.getMedicineName());
                 } else {
+                    System.out.println("🤖 식약처 DB에 없음. 제미나이에게 " + medicine.getMedicineName() + " 물어보는 중...");
+                    LlmMedicineResponseDto llmResponse = null;
+                    for (int retry = 1; retry <= 3; retry++) {
+                        llmResponse = geminiService.askMedicineDetails(medicine.getMedicineName());
+                        if (llmResponse != null) {
+                            break;
+                        }
+                        System.out.println("⚠️ 구글 서버 혼잡(503 등). 5초 후 재시도합니다... (" + retry + "/3)");
+                        Thread.sleep(5000);
+                    }
+                    if (llmResponse != null) {
+                        medicine.updateDetails(
+                                llmResponse.getEfficacy() != null ? llmResponse.getEfficacy() : "정보 없음",
+                                llmResponse.getUse_method() != null ? llmResponse.getUse_method() : "정보 없음",
+                                llmResponse.getPrecautions() != null ? llmResponse.getPrecautions() : "특이 주의사항 없음");
+                        updateCount++;
+                        System.out.println("✅ 제미나이 요약 성공: " + medicine.getMedicineName());
+                    } else {
+                        System.out.println("❌ 3번 재시도 실패. 이 약은 건너뜁니다: " + medicine.getMedicineName());
+                    }
                 }
                 Thread.sleep(50);
             } catch (Exception e) {
