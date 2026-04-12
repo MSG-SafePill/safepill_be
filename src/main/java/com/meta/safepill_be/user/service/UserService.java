@@ -5,6 +5,7 @@ import com.meta.safepill_be.user.domain.User;
 import com.meta.safepill_be.user.dto.LoginRequestDto;
 import com.meta.safepill_be.user.dto.SignupRequestDto;
 import com.meta.safepill_be.user.repository.UserRepository;
+import com.meta.safepill_be.user.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final JwtUtil jwtUtil;
 
     // 1. 회원가입 로직
     @Transactional
@@ -50,7 +52,8 @@ public class UserService {
             throw new IllegalArgumentException("잘못된 비밀번호입니다.");
         }
 
-        // 성공 시 (추후 JWT 토큰을 발급해서 리턴해야 함)
-        return "로그인 성공! (추후 토큰 발급 예정)";
+        // 👇 성공 시 토큰 발급으로 변경!
+        String token = jwtUtil.createToken(user.getLoginId());
+        return token; // "로그인 성공!" 텍스트 대신 암호화된 토큰을 프론트엔드로 던져줍니다.
     }
 }
