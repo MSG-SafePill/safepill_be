@@ -56,4 +56,8 @@ public class UserService {
         String token = jwtUtil.createToken(user.getLoginId());
         return token; // "로그인 성공!" 텍스트 대신 암호화된 토큰을 프론트엔드로 던져줍니다.
     }
+    // 👇 UserService 안에 중복 여부만 리턴하는 메서드 추가!
+    public boolean checkIdDuplication(String loginId) {
+        return userRepository.existsByLoginId(loginId);
+    }
 }
