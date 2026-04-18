@@ -3,6 +3,7 @@ package com.meta.safepill_be.medicine.controller;
 import com.meta.safepill_be.medicine.dto.SearchResponseDto;
 import com.meta.safepill_be.medicine.service.SearchService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -16,8 +17,13 @@ public class SearchController {
     private final SearchService searchService;
 
     @GetMapping
-    public ResponseEntity<SearchResponseDto> search(@RequestParam String keyword) {
-        SearchResponseDto result = searchService.searchMedicineAndSupplement(keyword);
+    public ResponseEntity<SearchResponseDto> search(
+            @RequestParam String keyword,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        PageRequest pageRequest = PageRequest.of(page, size);
+        SearchResponseDto result = searchService.searchMedicineAndSupplement(keyword, pageRequest);
         return ResponseEntity.ok(result);
     }
 }
