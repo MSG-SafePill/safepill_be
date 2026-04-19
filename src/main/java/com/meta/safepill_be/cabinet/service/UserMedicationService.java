@@ -42,6 +42,13 @@ public class UserMedicationService {
             throw new IllegalArgumentException("타입은 MEDICINE 또는 SUPPLEMENT 여야 합니다.");
         }
         medicationReg.setItemId(requestDto.getItemId());
+        ItemType selectedType = ItemType.valueOf(requestDto.getType().toUpperCase());
+        boolean isDuplicate = userMedicationRegRepository.isAlreadyRegistered(user, selectedType, requestDto.getItemId());
+        if (isDuplicate) {
+            throw new IllegalArgumentException("이미 내 약장에 등록된 약품/영양제입니다.");
+        }
+        medicationReg.setItem_type(selectedType);
+        medicationReg.setItemId(requestDto.getItemId());
         userMedicationRegRepository.save(medicationReg);
         return "내 약장에 성공적으로 등록되었습니다!";
     }
