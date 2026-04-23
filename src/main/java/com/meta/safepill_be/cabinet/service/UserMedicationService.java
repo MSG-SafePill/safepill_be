@@ -2,8 +2,11 @@ package com.meta.safepill_be.cabinet.service;
 
 import com.meta.safepill_be.cabinet.domain.ItemType;
 import com.meta.safepill_be.cabinet.domain.UserMedicationReg;
+import com.meta.safepill_be.cabinet.dto.CabinetItemResponseDto;
 import com.meta.safepill_be.cabinet.dto.MedicationRegRequestDto;
 import com.meta.safepill_be.cabinet.repository.UserMedicationRegRepository;
+import com.meta.safepill_be.medicine.domain.MedicineMaster;
+import com.meta.safepill_be.medicine.domain.SupplementMaster;
 import com.meta.safepill_be.medicine.repository.MedicineMasterRepository;
 import com.meta.safepill_be.medicine.repository.SupplementMasterRepository;
 import com.meta.safepill_be.user.domain.User;
@@ -11,6 +14,9 @@ import com.meta.safepill_be.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -51,5 +57,30 @@ public class UserMedicationService {
         medicationReg.setItemId(requestDto.getItemId());
         userMedicationRegRepository.save(medicationReg);
         return "내 약장에 성공적으로 등록되었습니다!";
+    }
+
+    @Transactional(readOnly = true)
+    public List<CabinetItemResponseDto> getMyMedications(String loginId) {
+        User user = userRepository.findByLoginId(loginId)
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+        List<UserMedicationReg> myRegList = userMedicationRegRepository.findByUserId(user.getId());
+        return myRegList.stream().map(reg -> {
+            String realName = "";
+            if (reg.getItem_type() == ItemType.MEDICINE) {
+                realName = medicineRepository.findById(reg.getItemId())
+                        .map(MedicineMaster::getMedicineName)
+                        .orElse("알 수 없는 약품");
+            } else if (reg.getItem_type() == ItemType.SUPPLEMENT) {
+                realName = supplementRepository.findById(reg.getItemId())
+                        .map(SupplementMaster::getSupplementName)
+                        .orElse("알 수 없는 영양제");
+            }
+            return CabinetItemResponseDto.builder()
+                    .regId(reg.getId())
+                    .type(reg.getItem_type())
+                    .itemId(reg.getItemId())
+                    .itemName(realName)
+                    .build();
+        }).collect(Collectors.toList());
     }
 }
