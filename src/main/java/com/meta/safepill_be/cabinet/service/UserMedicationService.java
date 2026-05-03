@@ -83,4 +83,17 @@ public class UserMedicationService {
                     .build();
         }).collect(Collectors.toList());
     }
+
+    @Transactional
+    public String deleteMedication(String loginId, Long regId) {
+        User user = userRepository.findByLoginId(loginId)
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+        UserMedicationReg medicationReg = userMedicationRegRepository.findById(regId)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 등록 정보입니다."));
+        if (!medicationReg.getUser().getId().equals(user.getId())) {
+            throw new IllegalArgumentException("해당 약장을 삭제할 권한이 없습니다.");
+        }
+        userMedicationRegRepository.delete(medicationReg);
+        return "내 약장에서 성공적으로 삭제되었습니다.";
+    }
 }

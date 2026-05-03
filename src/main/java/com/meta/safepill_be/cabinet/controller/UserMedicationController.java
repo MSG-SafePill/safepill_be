@@ -39,4 +39,14 @@ public class UserMedicationController {
 
         return ResponseEntity.ok(result);
     }
+
+    @DeleteMapping("/{regId}")
+    public ResponseEntity<String> deleteMedication(
+            @RequestHeader("Authorization") String token,
+            @PathVariable Long regId) {
+        String actualToken = token.replace("Bearer ", "");
+        String loginId = jwtUtil.getLoginIdFromToken(actualToken);
+        String result = userMedicationService.deleteMedication(loginId, regId);
+        return ResponseEntity.ok(result);
+    }
 }
