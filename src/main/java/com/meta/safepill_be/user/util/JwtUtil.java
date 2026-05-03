@@ -31,4 +31,13 @@ public class JwtUtil {
                 .signWith(secretKey) // 우리 서버만의 비밀 도장 쾅!
                 .compact();
     }
+
+    public String getLoginIdFromToken(String token) {
+        return Jwts.parser()
+                .verifyWith(secretKey)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload()
+                .getSubject();
+    }
 }

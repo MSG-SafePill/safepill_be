@@ -23,8 +23,11 @@ public class UserMedicationReg {
     @Column(name = "item_type", nullable = false)
     private ItemType item_type;
 
+    @Column(name = "item_id", nullable = false)
+    private Long itemId;
+
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false) // DB에 생성될 외래키 컬럼명
+    @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
     @OneToMany(mappedBy = "userMedicationReg", cascade = CascadeType.ALL, orphanRemoval = true)
