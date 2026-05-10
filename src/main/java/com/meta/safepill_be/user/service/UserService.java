@@ -7,6 +7,7 @@ import com.meta.safepill_be.user.dto.SignupRequestDto;
 import com.meta.safepill_be.user.repository.UserRepository;
 import com.meta.safepill_be.user.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,6 +17,7 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final JwtUtil jwtUtil;
+    private final PasswordEncoder passwordEncoder;
 
     // 1. 회원가입 로직
     @Transactional
@@ -27,7 +29,7 @@ public class UserService {
 
         User user = new User();
         user.setLoginId(requestDto.getLoginId());
-        user.setPassword(requestDto.getPassword()); // 🚨 현재는 평문 저장 (추후 암호화 적용 필요)
+        user.setPassword(passwordEncoder.encode(requestDto.getPassword()));
         user.setUsername(requestDto.getUsername());
         user.setEmail(requestDto.getEmail());
         user.setGender(requestDto.getGender());
@@ -48,7 +50,7 @@ public class UserService {
                 .orElseThrow(() -> new IllegalArgumentException("가입되지 않은 아이디입니다."));
 
         // 비밀번호 확인
-        if (!user.getPassword().equals(requestDto.getPassword())) {
+        if (!passwordEncoder.matches(requestDto.getPassword(), user.getPassword())) {
             throw new IllegalArgumentException("잘못된 비밀번호입니다.");
         }
 
