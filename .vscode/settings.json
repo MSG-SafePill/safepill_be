@@ -1,0 +1,27 @@
+{
+  "java.configuration.updateBuildConfiguration": "automatic",
+  "java.import.gradle.enabled": true,
+  "java.import.gradle.wrapper.enabled": true,
+  "java.compile.nullAnalysis.mode": "automatic",
+  "files.exclude": {
+    "**/.gradle": true,
+    "**/build": true
+  },
+  "search.exclude": {
+    "**/.gradle": true,
+    "**/build": true
+  },
+  "sqltools.connections": [
+    {
+      "ssh": "Disabled",
+      "previewLimit": 50,
+      "server": "localhost",
+      "port": 5432,
+      "askForPassword": true,
+      "driver": "PostgreSQL",
+      "name": "SafePill Local DB",
+      "database": "safepill",
+      "username": "postgres"
+    }
+  ]
+}

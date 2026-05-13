@@ -18,13 +18,24 @@ CREATE DATABASE safepill;
 
 2. `src/main/resources/application-template.properties`를 참고해 `application.properties`를 생성합니다.
 
-주의: `application.properties`에는 DB 비밀번호와 API 키가 들어가므로 Git에 커밋하지 않습니다.
 
 ## 실행
 
 ```powershell
 .\gradlew.bat bootRun
 ```
+
+VS Code에서는 `Run and Debug > Backend: Spring Boot` 또는 `Terminal > Run Task... > backend: bootRun`을 사용할 수 있습니다.
+
+## 로컬 PostgreSQL과 팀 DB 공유
+
+이 저장소는 `docker-compose.yml`과 `database/postgres/init/001-safepill-dev.sql`을 함께 관리합니다.
+
+```powershell
+docker compose up -d postgres
+```
+
+초기 컨테이너 생성 시 `safepill` DB, 테이블, 개발용 초기 데이터가 함께 로드됩니다. 이미 PostgreSQL 볼륨이 만들어진 뒤에는 init SQL이 다시 실행되지 않습니다.
 
 ## 검증 순서
 
