@@ -37,8 +37,10 @@ public class InteractionService {
         WebClient webClient = createWebClient();
         System.out.println("🚀 병용금기(상극) 데이터 파싱 및 DB 저장을 시작합니다...");
         int totalSaved = 0;
+        int page = 1;
+        int numOfRows = 500;
         try {
-            for (int page = 1; page <= 10; page++) {
+            while (true) {
                 final int currentPage = page;
                 System.out.println("📄 " + page + "페이지 데이터 요청 중...");
                 DurResponseDto response = webClient.get()
@@ -46,8 +48,8 @@ public class InteractionService {
                                 .path(durTabooEndpoint)
                                 .queryParam("serviceKey", serviceKey)
                                 .queryParam("type", "json")
-                                .queryParam("numOfRows", "100") // ⭐️ 안전하게 100개로 제한
-                                .queryParam("pageNo", String.valueOf(currentPage)) // ⭐️ 페이지 번호 넘기기
+                                .queryParam("numOfRows", String.valueOf(numOfRows))
+                                .queryParam("pageNo", String.valueOf(currentPage))
                                 .build())
                         .retrieve()
                         .bodyToMono(DurResponseDto.class)
@@ -67,6 +69,12 @@ public class InteractionService {
                     if (nameA == null || nameB == null || nameA.isEmpty() || nameB.isEmpty()) continue;
                     IngredientMaster ingredientA = findOrCreateIngredient(nameA);
                     IngredientMaster ingredientB = findOrCreateIngredient(nameB);
+                    if (interactionRuleRepository.existsByIngredientA_IdAndIngredientB_Id(
+                            ingredientA.getId(), ingredientB.getId())
+                            || interactionRuleRepository.existsByIngredientA_IdAndIngredientB_Id(
+                            ingredientB.getId(), ingredientA.getId())) {
+                        continue;
+                    }
                     InteractionRule rule = new InteractionRule();
                     rule.setIngredientA(ingredientA);
                     rule.setIngredientB(ingredientB);
@@ -77,6 +85,15 @@ public class InteractionService {
                 }
                 totalSaved += pageCount;
                 System.out.println("✅ " + page + "페이지 저장 완료! (누적: " + totalSaved + "건)");
+                Integer totalCount = response.getBody().getTotalCount();
+                if (totalCount != null && currentPage * numOfRows >= totalCount) {
+                    break;
+                }
+                if (wrappers.size() < numOfRows) {
+                    break;
+                }
+                page++;
+                Thread.sleep(100);
             }
             System.out.println("🎉 대규모 상극 데이터 수집 대성공! 총 " + totalSaved + "건 동기화 완료!");
         } catch (Exception e) {

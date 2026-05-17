@@ -20,6 +20,9 @@ public class SupplementResponseDto {
     public static class C003Data {
         @JsonProperty("row")
         private List<Item> items;
+
+        @JsonProperty("total_count")
+        private Integer totalCount;
     }
 
     @Getter
