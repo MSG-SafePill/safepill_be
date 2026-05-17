@@ -40,19 +40,28 @@ public class SupplementService {
     public void fetchAndSaveSupplements() {
         WebClient webClient = WebClient.builder().baseUrl(baseUrl).build();
         int startIdx = 1;
-        int endIdx = 100;
-        String endpoint = String.format("/%s/%s/json/%d/%d", apiKey, serviceId, startIdx, endIdx);
-        System.out.println("🚀 건강기능식품 API 호출 주소: " + baseUrl + endpoint);
+        int pageSize = 500;
+        int savedCount = 0;
+        System.out.println("🚀 건강기능식품 데이터 동기화를 시작합니다.");
         try {
-            SupplementResponseDto response = webClient.get()
-                    .uri(endpoint)
-                    .retrieve()
-                    .bodyToMono(SupplementResponseDto.class)
-                    .block();
-            if (response != null && response.getData() != null && response.getData().getItems() != null) {
+            while (true) {
+                int endIdx = startIdx + pageSize - 1;
+                String endpoint = String.format("/%s/%s/json/%d/%d", apiKey, serviceId, startIdx, endIdx);
+                SupplementResponseDto response = webClient.get()
+                        .uri(endpoint)
+                        .retrieve()
+                        .bodyToMono(SupplementResponseDto.class)
+                        .block();
+                if (response == null || response.getData() == null || response.getData().getItems() == null
+                        || response.getData().getItems().isEmpty()) {
+                    break;
+                }
                 List<SupplementResponseDto.Item> items = response.getData().getItems();
-                System.out.println("✅ 통신 성공! 가져온 영양제 개수: " + items.size() + "개");
+                System.out.println("✅ 건강기능식품 " + startIdx + "~" + endIdx + " 구간 수신: " + items.size() + "건");
                 for (SupplementResponseDto.Item item : items) {
+                    if (item.getItemSeq() == null || item.getItemSeq().trim().isEmpty()) {
+                        continue;
+                    }
                     if (supplementMasterRepository.findByItemSeq(item.getItemSeq()).isPresent()) {
                         continue;
                     }
@@ -92,11 +101,19 @@ public class SupplementService {
                         }
                     }
                     supplementMasterRepository.save(supplement);
+                    savedCount++;
                     System.out.println("✅ 영양제 저장 완료: " + supplement.getSupplementName());
                 }
-            } else {
-                System.out.println("⚠️ API 응답은 왔는데 데이터가 비어있습니다.");
+                Integer totalCount = response.getData().getTotalCount();
+                if (totalCount != null && endIdx >= totalCount) {
+                    break;
+                }
+                if (items.size() < pageSize) {
+                    break;
+                }
+                startIdx += pageSize;
             }
+            System.out.println("🎉 건강기능식품 동기화 완료! 신규 저장: " + savedCount + "건");
         } catch (Exception e) {
             System.out.println("❌ API 호출 중 에러 발생: " + e.getMessage());
         }
@@ -105,17 +122,24 @@ public class SupplementService {
     @Transactional
     public void fetchAndUpdateIngredientLimits() {
         WebClient webClient = WebClient.builder().baseUrl(baseUrl).build();
-        String endpoint = String.format("/%s/%s/json/1/100", apiKey, limitServiceId);
-        System.out.println("🚀 영양소 상한량 API 호출 주소: " + baseUrl + endpoint);
+        int startIdx = 1;
+        int pageSize = 500;
+        int updateCount = 0;
+        System.out.println("🚀 영양소 상한량 데이터 동기화를 시작합니다.");
         try {
-            IngredientLimitResponseDto response = webClient.get()
-                    .uri(endpoint)
-                    .retrieve()
-                    .bodyToMono(IngredientLimitResponseDto.class)
-                    .block();
-            if (response != null && response.getItems() != null) {
+            while (true) {
+                int endIdx = startIdx + pageSize - 1;
+                String endpoint = String.format("/%s/%s/json/%d/%d", apiKey, limitServiceId, startIdx, endIdx);
+                IngredientLimitResponseDto response = webClient.get()
+                        .uri(endpoint)
+                        .retrieve()
+                        .bodyToMono(IngredientLimitResponseDto.class)
+                        .block();
+                if (response == null || response.getItems() == null || response.getItems().isEmpty()) {
+                    break;
+                }
                 List<IngredientLimitResponseDto.Item> items = response.getItems();
-                System.out.println("✅ 가져온 상한량 데이터 개수: " + items.size() + "개");
+                System.out.println("✅ 상한량 " + startIdx + "~" + endIdx + " 구간 수신: " + items.size() + "건");
                 for (IngredientLimitResponseDto.Item item : items) {
                     String cleanName = getOrDefault(item.getIngredientName());
                     if (cleanName.equals("정보 없음")) continue;
@@ -156,14 +180,18 @@ public class SupplementService {
                     }
                     try {
                         ingredientMasterRepository.save(ingredient);
+                        updateCount++;
                         System.out.println("✅ 업데이트: " + ingredient.getIngredientName() + " (상한: " + finalLimit + ")");
                     } catch (Exception e) {
                         System.out.println("🚨 [DB 터짐! 범인 발견] 성분명: " + cleanName + " / 넣으려던 숫자: " + finalLimit);
                     }
                 }
-            } else {
-                System.out.println("⚠️ 상한량 API 응답에 데이터가 없습니다.");
+                if (items.size() < pageSize) {
+                    break;
+                }
+                startIdx += pageSize;
             }
+            System.out.println("🎉 영양소 상한량 동기화 완료! 반영: " + updateCount + "건");
         } catch (Exception e) {
             System.out.println("❌ API 호출 에러: " + e.getMessage());
         }

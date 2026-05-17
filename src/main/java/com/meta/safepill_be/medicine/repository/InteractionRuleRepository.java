@@ -14,4 +14,6 @@ public interface InteractionRuleRepository extends JpaRepository<InteractionRule
     List<InteractionRule> findInteractionsByIngredientIds(@Param("ingredientIds") List<Long> ingredientIds);
 
     List<InteractionRule> findByIngredientA_IdOrIngredientB_Id(Long ingredientIdA, Long ingredientIdB);
+
+    boolean existsByIngredientA_IdAndIngredientB_Id(Long ingredientAId, Long ingredientBId);
 }

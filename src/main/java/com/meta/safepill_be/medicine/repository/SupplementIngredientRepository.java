@@ -7,4 +7,5 @@ import java.util.List;
 
 public interface SupplementIngredientRepository extends JpaRepository<SupplementIngredient, Long> {
     List<SupplementIngredient> findBySupplementMaster_Id(Long supplementId);
+    boolean existsBySupplementMaster_IdAndIngredientMaster_Id(Long supplementId, Long ingredientId);
 }

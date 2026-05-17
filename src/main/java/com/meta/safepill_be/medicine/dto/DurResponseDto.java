@@ -12,11 +12,26 @@ import java.util.List;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class DurResponseDto {
     private Body body;
+    private Response response;
+
+    public Body getBody() {
+        if (body != null) {
+            return body;
+        }
+        return response != null ? response.getBody() : null;
+    }
+
+    @Getter
+    @Setter
+    public static class Response {
+        private Body body;
+    }
 
     @Getter
     @Setter
     public static class Body {
         private List<ItemWrapper> items;
+        private Integer totalCount;
     }
 
     @Getter

@@ -10,11 +10,26 @@ import java.util.List;
 @NoArgsConstructor
 public class IngredientResponseDto {
     private Body body;
+    private Response response;
+
+    public Body getBody() {
+        if (body != null) {
+            return body;
+        }
+        return response != null ? response.getBody() : null;
+    }
+
+    @Getter
+    @NoArgsConstructor
+    public static class Response {
+        private Body body;
+    }
 
     @Getter
     @NoArgsConstructor
     public static class Body {
         private List<Item> items;
+        private Integer totalCount;
     }
 
     @Getter
