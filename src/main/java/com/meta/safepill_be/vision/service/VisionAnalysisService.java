@@ -5,6 +5,8 @@ import com.meta.safepill_be.medicine.domain.InteractionRule;
 import com.meta.safepill_be.medicine.domain.MedicineIngredient;
 import com.meta.safepill_be.medicine.domain.MedicineMaster;
 import com.meta.safepill_be.medicine.repository.InteractionRuleRepository;
+import com.meta.safepill_be.medicine.repository.IngredientMasterRepository;
+import com.meta.safepill_be.medicine.repository.MedicineIngredientRepository;
 import com.meta.safepill_be.medicine.repository.MedicineMasterRepository;
 import com.meta.safepill_be.vision.client.PythonAiClient;
 import com.meta.safepill_be.vision.dto.*;
@@ -23,6 +25,8 @@ import java.util.Map;
 public class VisionAnalysisService {
     private final PythonAiClient pythonAiClient;
     private final MedicineMasterRepository medicineMasterRepository;
+    private final IngredientMasterRepository ingredientMasterRepository;
+    private final MedicineIngredientRepository medicineIngredientRepository;
     private final InteractionRuleRepository interactionRuleRepository;
 
     @Transactional(readOnly = true)
@@ -84,10 +88,32 @@ public class VisionAnalysisService {
         if (medicines.isEmpty() && normalizedKeyword.length() > 4) {
             medicines = medicineMasterRepository.findTop5ByMedicineNameContainingIgnoreCase(normalizedKeyword.substring(0, 4));
         }
+        if (medicines.isEmpty()) {
+            medicines = matchMedicinesByIngredient(keyword);
+        }
 
         return medicines.stream()
                 .map(medicine -> toCandidate(medicine, confidence, matchedText))
                 .toList();
+    }
+
+    private List<MedicineMaster> matchMedicinesByIngredient(String normalizedKeyword) {
+        List<String> ingredientHints = extractIngredientHints(normalizedKeyword);
+        Map<Long, MedicineMaster> medicinesById = new LinkedHashMap<>();
+        for (String hint : ingredientHints) {
+            if (hint.length() < 2) {
+                continue;
+            }
+            List<IngredientMaster> ingredients = ingredientMasterRepository.findTop5ByIngredientNameContainingIgnoreCase(hint);
+            for (IngredientMaster ingredient : ingredients) {
+                List<MedicineIngredient> medicineIngredients = medicineIngredientRepository.findTop10ByIngredientMaster_Id(ingredient.getId());
+                for (MedicineIngredient medicineIngredient : medicineIngredients) {
+                    MedicineMaster medicine = medicineIngredient.getMedicineMaster();
+                    medicinesById.putIfAbsent(medicine.getId(), medicine);
+                }
+            }
+        }
+        return new ArrayList<>(medicinesById.values());
     }
 
     private VisionMedicineCandidateDto toCandidate(MedicineMaster medicine, double confidence, String matchedText) {
@@ -160,5 +186,24 @@ public class VisionAnalysisService {
                 .replaceAll("\\[[^]]*]", "")
                 .replaceAll("[^0-9A-Za-z가-힣]", "")
                 .trim();
+    }
+
+    private List<String> extractIngredientHints(String keyword) {
+        if (keyword == null || keyword.isBlank()) {
+            return List.of();
+        }
+        List<String> hints = new ArrayList<>();
+        hints.add(keyword);
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("\\(([^)]{2,})\\)").matcher(keyword);
+        while (matcher.find()) {
+            hints.add(normalizeKeyword(matcher.group(1)));
+        }
+        String withoutDose = keyword.replaceAll("\\d+(?:\\.\\d+)?(?:MG|G|MCG|UG|ML|밀리그램)", "");
+        hints.add(withoutDose);
+        return hints.stream()
+                .map(this::normalizeKeyword)
+                .filter(hint -> !hint.isBlank())
+                .distinct()
+                .toList();
     }
 }
