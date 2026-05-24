@@ -2,10 +2,13 @@ package com.meta.safepill_be.cabinet.service;
 
 import com.meta.safepill_be.cabinet.domain.ItemType;
 import com.meta.safepill_be.cabinet.domain.UserMedicationReg;
+import com.meta.safepill_be.cabinet.dto.CabinetIngredientResponseDto;
 import com.meta.safepill_be.cabinet.dto.CabinetItemResponseDto;
 import com.meta.safepill_be.cabinet.dto.MedicationRegRequestDto;
 import com.meta.safepill_be.cabinet.repository.UserMedicationRegRepository;
+import com.meta.safepill_be.medicine.domain.MedicineIngredient;
 import com.meta.safepill_be.medicine.domain.MedicineMaster;
+import com.meta.safepill_be.medicine.domain.SupplementIngredient;
 import com.meta.safepill_be.medicine.domain.SupplementMaster;
 import com.meta.safepill_be.medicine.repository.MedicineMasterRepository;
 import com.meta.safepill_be.medicine.repository.SupplementMasterRepository;
@@ -65,21 +68,43 @@ public class UserMedicationService {
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
         List<UserMedicationReg> myRegList = userMedicationRegRepository.findByUserId(user.getId());
         return myRegList.stream().map(reg -> {
-            String realName = "";
             if (reg.getItem_type() == ItemType.MEDICINE) {
-                realName = medicineRepository.findById(reg.getItemId())
-                        .map(MedicineMaster::getMedicineName)
-                        .orElse("알 수 없는 약품");
+                MedicineMaster medicine = medicineRepository.findById(reg.getItemId()).orElse(null);
+                return CabinetItemResponseDto.builder()
+                        .regId(reg.getId())
+                        .type(reg.getItem_type())
+                        .itemId(reg.getItemId())
+                        .itemName(medicine != null ? medicine.getMedicineName() : "알 수 없는 약품")
+                        .manufacturer(medicine != null ? medicine.getMedicineManufacturer() : null)
+                        .imageUrl(medicine != null && medicine.getAppearanceInfo() != null ? medicine.getAppearanceInfo().getImageUrl() : null)
+                        .efficacy(medicine != null ? medicine.getEfficacy() : null)
+                        .precautions(medicine != null ? medicine.getPrecautions() : null)
+                        .ingredients(medicine != null ? medicine.getIngredients().stream()
+                                .map(this::toMedicineIngredientDto)
+                                .collect(Collectors.toList()) : List.of())
+                        .build();
             } else if (reg.getItem_type() == ItemType.SUPPLEMENT) {
-                realName = supplementRepository.findById(reg.getItemId())
-                        .map(SupplementMaster::getSupplementName)
-                        .orElse("알 수 없는 영양제");
+                SupplementMaster supplement = supplementRepository.findById(reg.getItemId()).orElse(null);
+                return CabinetItemResponseDto.builder()
+                        .regId(reg.getId())
+                        .type(reg.getItem_type())
+                        .itemId(reg.getItemId())
+                        .itemName(supplement != null ? supplement.getSupplementName() : "알 수 없는 영양제")
+                        .manufacturer(supplement != null ? supplement.getSupplementManufacturer() : null)
+                        .imageUrl(supplement != null && supplement.getAppearanceInfo() != null ? supplement.getAppearanceInfo().getImageUrl() : null)
+                        .efficacy(supplement != null ? supplement.getEfficacy() : null)
+                        .precautions(supplement != null ? supplement.getPrecautions() : null)
+                        .ingredients(supplement != null ? supplement.getIngredients().stream()
+                                .map(this::toSupplementIngredientDto)
+                                .collect(Collectors.toList()) : List.of())
+                        .build();
             }
             return CabinetItemResponseDto.builder()
                     .regId(reg.getId())
                     .type(reg.getItem_type())
                     .itemId(reg.getItemId())
-                    .itemName(realName)
+                    .itemName("알 수 없는 항목")
+                    .ingredients(List.of())
                     .build();
         }).collect(Collectors.toList());
     }
@@ -95,5 +120,23 @@ public class UserMedicationService {
         }
         userMedicationRegRepository.delete(medicationReg);
         return "내 약장에서 성공적으로 삭제되었습니다.";
+    }
+
+    private CabinetIngredientResponseDto toMedicineIngredientDto(MedicineIngredient ingredient) {
+        return CabinetIngredientResponseDto.builder()
+                .ingredientId(ingredient.getIngredientMaster().getId())
+                .ingredientName(ingredient.getIngredientMaster().getIngredientName())
+                .dosage(ingredient.getDosage())
+                .unit(ingredient.getIngredientMaster().getUnit())
+                .build();
+    }
+
+    private CabinetIngredientResponseDto toSupplementIngredientDto(SupplementIngredient ingredient) {
+        return CabinetIngredientResponseDto.builder()
+                .ingredientId(ingredient.getIngredientMaster().getId())
+                .ingredientName(ingredient.getIngredientMaster().getIngredientName())
+                .dosage(ingredient.getDosage())
+                .unit(ingredient.getIngredientMaster().getUnit())
+                .build();
     }
 }

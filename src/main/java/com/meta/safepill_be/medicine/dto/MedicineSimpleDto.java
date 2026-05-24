@@ -12,14 +12,20 @@ public class MedicineSimpleDto {
     private String medicineName;
     private String manufacturer;
     private String imageUrl;
+    private boolean registered;
 
     public static MedicineSimpleDto from(MedicineMaster entity) {
+        return from(entity, false);
+    }
+
+    public static MedicineSimpleDto from(MedicineMaster entity, boolean registered) {
         return MedicineSimpleDto.builder()
                 .id(entity.getId())
                 .itemSeq(entity.getItemSeq())
                 .medicineName(entity.getMedicineName())
                 .manufacturer(entity.getMedicineManufacturer())
                 .imageUrl(entity.getAppearanceInfo() != null ? entity.getAppearanceInfo().getImageUrl() : null)
+                .registered(registered)
                 .build();
     }
 }

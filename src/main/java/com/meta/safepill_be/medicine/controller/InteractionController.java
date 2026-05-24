@@ -1,5 +1,6 @@
 package com.meta.safepill_be.medicine.controller;
 
+import com.meta.safepill_be.medicine.dto.AiInteractionAnalyzeResponseDto;
 import com.meta.safepill_be.medicine.dto.InteractionAnalyzeRequestDto;
 import com.meta.safepill_be.medicine.dto.InteractionAnalyzeResponseDto;
 import com.meta.safepill_be.medicine.service.InteractionService;
@@ -43,5 +44,13 @@ public class InteractionController {
         String loginId = jwtUtil.getLoginIdFromToken(actualToken);
         List<InteractionAnalyzeResponseDto> result = interactionService.analyzeMyCabinetInteractions(loginId);
         return ResponseEntity.ok(result);
+    }
+
+    @GetMapping("/my-cabinet/analyze/ai")
+    public ResponseEntity<AiInteractionAnalyzeResponseDto> analyzeMyCabinetWithAi(
+            @RequestHeader("Authorization") String token) {
+        String actualToken = token.replace("Bearer ", "");
+        String loginId = jwtUtil.getLoginIdFromToken(actualToken);
+        return ResponseEntity.ok(interactionService.analyzeMyCabinetInteractionsWithAi(loginId));
     }
 }

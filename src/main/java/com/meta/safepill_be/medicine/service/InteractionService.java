@@ -10,14 +10,22 @@ import com.meta.safepill_be.medicine.domain.MedicineMaster;
 import com.meta.safepill_be.medicine.domain.RiskLevel;
 import com.meta.safepill_be.medicine.domain.SupplementIngredient;
 import com.meta.safepill_be.medicine.domain.SupplementMaster;
+import com.meta.safepill_be.medicine.dto.AiInteractionAnalyzeRequestDto;
+import com.meta.safepill_be.medicine.dto.AiInteractionAnalyzeResponseDto;
+import com.meta.safepill_be.medicine.dto.AiInteractionIngredientDto;
+import com.meta.safepill_be.medicine.dto.AiInteractionItemDto;
+import com.meta.safepill_be.medicine.dto.AiInteractionRuleDto;
 import com.meta.safepill_be.medicine.dto.DurResponseDto;
 import com.meta.safepill_be.medicine.dto.InteractionAnalyzeResponseDto;
 import com.meta.safepill_be.medicine.repository.IngredientMasterRepository;
 import com.meta.safepill_be.medicine.repository.InteractionRuleRepository;
 import com.meta.safepill_be.medicine.repository.MedicineMasterRepository;
 import com.meta.safepill_be.medicine.repository.SupplementMasterRepository;
+import com.meta.safepill_be.user.domain.HealthProfile;
 import com.meta.safepill_be.user.domain.User;
+import com.meta.safepill_be.user.repository.HealthProfileRepository;
 import com.meta.safepill_be.user.repository.UserRepository;
+import com.meta.safepill_be.vision.client.PythonAiClient;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -43,6 +51,8 @@ public class InteractionService {
     private final SupplementMasterRepository supplementMasterRepository;
     private final UserMedicationRegRepository userMedicationRegRepository;
     private final UserRepository userRepository;
+    private final HealthProfileRepository healthProfileRepository;
+    private final PythonAiClient pythonAiClient;
     @Value("${open-api.data-go-kr.base-url}")
     private String baseUrl;
 
@@ -249,6 +259,32 @@ public class InteractionService {
         return result;
     }
 
+    @Transactional(readOnly = true)
+    public AiInteractionAnalyzeResponseDto analyzeMyCabinetInteractionsWithAi(String loginId) {
+        User user = userRepository.findByLoginId(loginId)
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+        List<UserMedicationReg> registrations = userMedicationRegRepository.findByUserId(user.getId());
+        List<AiInteractionItemDto> items = buildAiInteractionItems(registrations);
+        List<AiInteractionRuleDto> rules = analyzeMyCabinetInteractions(loginId).stream()
+                .map(result -> AiInteractionRuleDto.builder()
+                        .itemNameA(result.getItemNameA())
+                        .itemNameB(result.getItemNameB())
+                        .ingredientNameA(result.getIngredientNameA())
+                        .ingredientNameB(result.getIngredientNameB())
+                        .riskLevel(result.getRiskLevel() != null ? result.getRiskLevel().name() : null)
+                        .description(result.getDescription())
+                        .build())
+                .collect(Collectors.toList());
+
+        AiInteractionAnalyzeRequestDto requestDto = AiInteractionAnalyzeRequestDto.builder()
+                .items(items)
+                .interactionRules(rules)
+                .userProfile(buildUserProfile(user))
+                .build();
+
+        return pythonAiClient.analyzeInteraction(requestDto);
+    }
+
     private List<CabinetIngredientSource> buildCabinetIngredientSources(List<UserMedicationReg> registrations) {
         Map<Long, UserMedicationReg> medicineRegsByItemId = registrations.stream()
                 .filter(reg -> reg.getItem_type() == ItemType.MEDICINE)
@@ -293,6 +329,67 @@ public class InteractionService {
         }
 
         return sources;
+    }
+
+    private List<AiInteractionItemDto> buildAiInteractionItems(List<UserMedicationReg> registrations) {
+        Map<Long, UserMedicationReg> medicineRegsByItemId = registrations.stream()
+                .filter(reg -> reg.getItem_type() == ItemType.MEDICINE)
+                .collect(Collectors.toMap(UserMedicationReg::getItemId, Function.identity(), (left, right) -> left));
+        Map<Long, UserMedicationReg> supplementRegsByItemId = registrations.stream()
+                .filter(reg -> reg.getItem_type() == ItemType.SUPPLEMENT)
+                .collect(Collectors.toMap(UserMedicationReg::getItemId, Function.identity(), (left, right) -> left));
+
+        List<AiInteractionItemDto> items = new ArrayList<>();
+        List<MedicineMaster> medicines = medicineRegsByItemId.isEmpty()
+                ? List.of()
+                : medicineMasterRepository.findByIdIn(new ArrayList<>(medicineRegsByItemId.keySet()));
+        for (MedicineMaster medicine : medicines) {
+            items.add(AiInteractionItemDto.builder()
+                    .itemName(medicine.getMedicineName())
+                    .itemType(ItemType.MEDICINE.name())
+                    .ingredients(medicine.getIngredients().stream()
+                            .map(ingredient -> AiInteractionIngredientDto.builder()
+                                    .name(ingredient.getIngredientMaster().getIngredientName())
+                                    .dosage(ingredient.getDosage() != null ? ingredient.getDosage().toPlainString() : null)
+                                    .build())
+                            .collect(Collectors.toList()))
+                    .efficacy(medicine.getEfficacy())
+                    .precautions(medicine.getPrecautions())
+                    .build());
+        }
+
+        List<SupplementMaster> supplements = supplementRegsByItemId.isEmpty()
+                ? List.of()
+                : supplementMasterRepository.findByIdIn(new ArrayList<>(supplementRegsByItemId.keySet()));
+        for (SupplementMaster supplement : supplements) {
+            items.add(AiInteractionItemDto.builder()
+                    .itemName(supplement.getSupplementName())
+                    .itemType(ItemType.SUPPLEMENT.name())
+                    .ingredients(supplement.getIngredients().stream()
+                            .map(ingredient -> AiInteractionIngredientDto.builder()
+                                    .name(ingredient.getIngredientMaster().getIngredientName())
+                                    .dosage(ingredient.getDosage() != null ? ingredient.getDosage().toPlainString() : null)
+                                    .build())
+                            .collect(Collectors.toList()))
+                    .efficacy(supplement.getEfficacy())
+                    .precautions(supplement.getPrecautions())
+                    .build());
+        }
+
+        return items;
+    }
+
+    private Map<String, Object> buildUserProfile(User user) {
+        Map<String, Object> profile = new HashMap<>();
+        profile.put("gender", user.getGender() != null ? user.getGender().name() : null);
+        profile.put("birthDate", user.getBirthDate() != null ? user.getBirthDate().toString() : null);
+        healthProfileRepository.findByUserId(user.getId()).ifPresent(healthProfile -> addHealthProfile(profile, healthProfile));
+        return profile;
+    }
+
+    private void addHealthProfile(Map<String, Object> profile, HealthProfile healthProfile) {
+        profile.put("disease", healthProfile.getDisease());
+        profile.put("allergy", healthProfile.getAllergy());
     }
 
     private record CabinetIngredientSource(

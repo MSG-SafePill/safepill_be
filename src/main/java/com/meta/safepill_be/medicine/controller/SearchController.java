@@ -5,6 +5,7 @@ import com.meta.safepill_be.medicine.service.SearchService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -18,12 +19,13 @@ public class SearchController {
 
     @GetMapping
     public ResponseEntity<SearchResponseDto> search(
+            @RequestHeader(value = "Authorization", required = false) String token,
             @RequestParam String keyword,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
         PageRequest pageRequest = PageRequest.of(page, size);
-        SearchResponseDto result = searchService.searchMedicineAndSupplement(keyword, pageRequest);
+        SearchResponseDto result = searchService.searchMedicineAndSupplement(keyword, pageRequest, token);
         return ResponseEntity.ok(result);
     }
 }

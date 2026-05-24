@@ -1,5 +1,7 @@
 package com.meta.safepill_be.vision.client;
 
+import com.meta.safepill_be.medicine.dto.AiInteractionAnalyzeRequestDto;
+import com.meta.safepill_be.medicine.dto.AiInteractionAnalyzeResponseDto;
 import com.meta.safepill_be.vision.dto.AiIdentifyResponseDto;
 import com.meta.safepill_be.vision.dto.AiPrescriptionOcrResponseDto;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +30,17 @@ public class PythonAiClient {
 
     public AiPrescriptionOcrResponseDto scanPrescription(MultipartFile image) {
         return postImage("/prescription-ocr-upload", image, AiPrescriptionOcrResponseDto.class);
+    }
+
+    public AiInteractionAnalyzeResponseDto analyzeInteraction(AiInteractionAnalyzeRequestDto requestDto) {
+        return webClientBuilder.build()
+                .post()
+                .uri(aiBaseUrl + "/interaction/analyze")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(requestDto)
+                .retrieve()
+                .bodyToMono(AiInteractionAnalyzeResponseDto.class)
+                .block();
     }
 
     private <T> T postImage(String path, MultipartFile image, Class<T> responseType) {
