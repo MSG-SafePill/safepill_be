@@ -1,13 +1,23 @@
 package com.meta.safepill_be.medicine.service;
 
+import com.meta.safepill_be.cabinet.domain.ItemType;
+import com.meta.safepill_be.cabinet.domain.UserMedicationReg;
+import com.meta.safepill_be.cabinet.repository.UserMedicationRegRepository;
 import com.meta.safepill_be.medicine.domain.IngredientMaster;
 import com.meta.safepill_be.medicine.domain.InteractionRule;
+import com.meta.safepill_be.medicine.domain.MedicineIngredient;
+import com.meta.safepill_be.medicine.domain.MedicineMaster;
 import com.meta.safepill_be.medicine.domain.RiskLevel;
+import com.meta.safepill_be.medicine.domain.SupplementIngredient;
+import com.meta.safepill_be.medicine.domain.SupplementMaster;
 import com.meta.safepill_be.medicine.dto.DurResponseDto;
 import com.meta.safepill_be.medicine.dto.InteractionAnalyzeResponseDto;
 import com.meta.safepill_be.medicine.repository.IngredientMasterRepository;
 import com.meta.safepill_be.medicine.repository.InteractionRuleRepository;
 import com.meta.safepill_be.medicine.repository.MedicineMasterRepository;
+import com.meta.safepill_be.medicine.repository.SupplementMasterRepository;
+import com.meta.safepill_be.user.domain.User;
+import com.meta.safepill_be.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -15,7 +25,14 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.util.DefaultUriBuilderFactory;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -23,6 +40,9 @@ public class InteractionService {
     private final InteractionRuleRepository interactionRuleRepository;
     private final IngredientMasterRepository ingredientMasterRepository;
     private final MedicineMasterRepository medicineMasterRepository;
+    private final SupplementMasterRepository supplementMasterRepository;
+    private final UserMedicationRegRepository userMedicationRegRepository;
+    private final UserRepository userRepository;
     @Value("${open-api.data-go-kr.base-url}")
     private String baseUrl;
 
@@ -162,5 +182,124 @@ public class InteractionService {
             }
         }
         return result;
+    }
+
+    @Transactional(readOnly = true)
+    public List<InteractionAnalyzeResponseDto> analyzeMyCabinetInteractions(String loginId) {
+        User user = userRepository.findByLoginId(loginId)
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+        List<UserMedicationReg> registrations = userMedicationRegRepository.findByUserId(user.getId());
+        if (registrations.size() < 2) {
+            return List.of();
+        }
+
+        List<CabinetIngredientSource> sources = buildCabinetIngredientSources(registrations);
+        Map<Long, Set<CabinetIngredientSource>> ingredientToSources = new HashMap<>();
+        for (CabinetIngredientSource source : sources) {
+            ingredientToSources.computeIfAbsent(source.ingredientId(), key -> new HashSet<>()).add(source);
+        }
+
+        if (ingredientToSources.size() < 2) {
+            return List.of();
+        }
+
+        List<InteractionRule> triggeredRules = interactionRuleRepository.findInteractionsByIngredientIds(
+                new ArrayList<>(ingredientToSources.keySet()));
+        List<InteractionAnalyzeResponseDto> result = new ArrayList<>();
+        Set<String> alreadyAdded = new HashSet<>();
+
+        for (InteractionRule rule : triggeredRules) {
+            Set<CabinetIngredientSource> sourcesA = ingredientToSources.get(rule.getIngredientA().getId());
+            Set<CabinetIngredientSource> sourcesB = ingredientToSources.get(rule.getIngredientB().getId());
+            if (sourcesA == null || sourcesB == null) {
+                continue;
+            }
+
+            for (CabinetIngredientSource sourceA : sourcesA) {
+                for (CabinetIngredientSource sourceB : sourcesB) {
+                    if (sourceA.regId().equals(sourceB.regId())) {
+                        continue;
+                    }
+
+                    Long minRegId = Math.min(sourceA.regId(), sourceB.regId());
+                    Long maxRegId = Math.max(sourceA.regId(), sourceB.regId());
+                    Long minIngredientId = Math.min(rule.getIngredientA().getId(), rule.getIngredientB().getId());
+                    Long maxIngredientId = Math.max(rule.getIngredientA().getId(), rule.getIngredientB().getId());
+                    String key = minRegId + "_" + maxRegId + "_" + minIngredientId + "_" + maxIngredientId;
+                    if (!alreadyAdded.add(key)) {
+                        continue;
+                    }
+
+                    result.add(InteractionAnalyzeResponseDto.builder()
+                            .itemNameA(sourceA.itemName())
+                            .itemNameB(sourceB.itemName())
+                            .itemTypeA(sourceA.itemType())
+                            .itemTypeB(sourceB.itemType())
+                            .medicineNameA(sourceA.itemName())
+                            .medicineNameB(sourceB.itemName())
+                            .ingredientNameA(rule.getIngredientA().getIngredientName())
+                            .ingredientNameB(rule.getIngredientB().getIngredientName())
+                            .riskLevel(rule.getRiskLevel())
+                            .description(rule.getDescription())
+                            .build());
+                }
+            }
+        }
+
+        return result;
+    }
+
+    private List<CabinetIngredientSource> buildCabinetIngredientSources(List<UserMedicationReg> registrations) {
+        Map<Long, UserMedicationReg> medicineRegsByItemId = registrations.stream()
+                .filter(reg -> reg.getItem_type() == ItemType.MEDICINE)
+                .collect(Collectors.toMap(UserMedicationReg::getItemId, Function.identity(), (left, right) -> left));
+        Map<Long, UserMedicationReg> supplementRegsByItemId = registrations.stream()
+                .filter(reg -> reg.getItem_type() == ItemType.SUPPLEMENT)
+                .collect(Collectors.toMap(UserMedicationReg::getItemId, Function.identity(), (left, right) -> left));
+
+        List<CabinetIngredientSource> sources = new ArrayList<>();
+        List<MedicineMaster> medicines = medicineRegsByItemId.isEmpty()
+                ? List.of()
+                : medicineMasterRepository.findByIdIn(new ArrayList<>(medicineRegsByItemId.keySet()));
+        for (MedicineMaster medicine : medicines) {
+            UserMedicationReg reg = medicineRegsByItemId.get(medicine.getId());
+            if (reg == null) {
+                continue;
+            }
+            for (MedicineIngredient ingredient : medicine.getIngredients()) {
+                sources.add(new CabinetIngredientSource(
+                        reg.getId(),
+                        ItemType.MEDICINE,
+                        medicine.getMedicineName(),
+                        ingredient.getIngredientMaster().getId()));
+            }
+        }
+
+        List<SupplementMaster> supplements = supplementRegsByItemId.isEmpty()
+                ? List.of()
+                : supplementMasterRepository.findByIdIn(new ArrayList<>(supplementRegsByItemId.keySet()));
+        for (SupplementMaster supplement : supplements) {
+            UserMedicationReg reg = supplementRegsByItemId.get(supplement.getId());
+            if (reg == null) {
+                continue;
+            }
+            for (SupplementIngredient ingredient : supplement.getIngredients()) {
+                sources.add(new CabinetIngredientSource(
+                        reg.getId(),
+                        ItemType.SUPPLEMENT,
+                        supplement.getSupplementName(),
+                        ingredient.getIngredientMaster().getId()));
+            }
+        }
+
+        return sources;
+    }
+
+    private record CabinetIngredientSource(
+            Long regId,
+            ItemType itemType,
+            String itemName,
+            Long ingredientId
+    ) {
     }
 }

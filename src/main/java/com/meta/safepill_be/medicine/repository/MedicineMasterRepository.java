@@ -14,5 +14,7 @@ public interface MedicineMasterRepository extends JpaRepository<MedicineMaster, 
     Page<MedicineMaster> findByMedicineNameContaining(String medicineName, Pageable pageable);
     @EntityGraph(attributePaths = {"ingredients", "ingredients.ingredientMaster"})
     List<MedicineMaster> findTop5ByMedicineNameContainingIgnoreCase(String medicineName);
+    @EntityGraph(attributePaths = {"ingredients", "ingredients.ingredientMaster"})
+    List<MedicineMaster> findByIdIn(List<Long> ids);
     List<MedicineMaster> findByEfficacyIsNull();
 }
