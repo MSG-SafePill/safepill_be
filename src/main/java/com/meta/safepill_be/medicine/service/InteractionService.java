@@ -12,9 +12,11 @@ import com.meta.safepill_be.medicine.domain.SupplementIngredient;
 import com.meta.safepill_be.medicine.domain.SupplementMaster;
 import com.meta.safepill_be.medicine.dto.AiInteractionAnalyzeRequestDto;
 import com.meta.safepill_be.medicine.dto.AiInteractionAnalyzeResponseDto;
+import com.meta.safepill_be.medicine.dto.AiInteractionEvidenceDto;
 import com.meta.safepill_be.medicine.dto.AiInteractionIngredientDto;
 import com.meta.safepill_be.medicine.dto.AiInteractionItemDto;
 import com.meta.safepill_be.medicine.dto.AiInteractionRuleDto;
+import com.meta.safepill_be.medicine.dto.AiInteractionWarningDto;
 import com.meta.safepill_be.medicine.dto.DurResponseDto;
 import com.meta.safepill_be.medicine.dto.InteractionAnalyzeResponseDto;
 import com.meta.safepill_be.medicine.repository.IngredientMasterRepository;
@@ -39,6 +41,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -282,7 +285,15 @@ public class InteractionService {
                 .userProfile(buildUserProfile(user))
                 .build();
 
-        return pythonAiClient.analyzeInteraction(requestDto);
+        try {
+            AiInteractionAnalyzeResponseDto response = pythonAiClient.analyzeInteraction(requestDto);
+            if (response == null) {
+                return buildFallbackAiAnalysis(items, rules, "AI 서버가 빈 응답을 반환했습니다.");
+            }
+            return response;
+        } catch (RuntimeException e) {
+            return buildFallbackAiAnalysis(items, rules, "AI 서버 연결에 실패하여 DUR 룰 기반으로 분석했습니다.");
+        }
     }
 
     private List<CabinetIngredientSource> buildCabinetIngredientSources(List<UserMedicationReg> registrations) {
@@ -390,6 +401,123 @@ public class InteractionService {
     private void addHealthProfile(Map<String, Object> profile, HealthProfile healthProfile) {
         profile.put("disease", healthProfile.getDisease());
         profile.put("allergy", healthProfile.getAllergy());
+    }
+
+    private AiInteractionAnalyzeResponseDto buildFallbackAiAnalysis(
+            List<AiInteractionItemDto> items,
+            List<AiInteractionRuleDto> rules,
+            String fallbackReason
+    ) {
+        if (items.size() < 2) {
+            return AiInteractionAnalyzeResponseDto.builder()
+                    .requestId("fallback-" + UUID.randomUUID())
+                    .status("fallback")
+                    .riskLevel("NONE")
+                    .summary("분석할 약품 또는 영양제가 2개 미만입니다.")
+                    .warnings(List.of())
+                    .recommendations(List.of("새로운 약이나 영양제를 추가하기 전에는 의사 또는 약사와 상담하세요."))
+                    .evidence(List.of(AiInteractionEvidenceDto.builder()
+                            .source("BACKEND_FALLBACK")
+                            .text(fallbackReason)
+                            .build()))
+                    .disclaimer(disclaimer())
+                    .build();
+        }
+
+        if (rules.isEmpty()) {
+            return AiInteractionAnalyzeResponseDto.builder()
+                    .requestId("fallback-" + UUID.randomUUID())
+                    .status("fallback")
+                    .riskLevel("NONE")
+                    .summary("현재 등록된 DUR 룰 기준으로 확인된 병용금기 또는 주의 상호작용은 없습니다.")
+                    .warnings(List.of())
+                    .recommendations(List.of(
+                            "새로운 약이나 영양제를 추가하기 전에는 현재 복용 목록을 의사 또는 약사에게 보여주세요.",
+                            "증상 변화가 있거나 여러 약을 장기간 함께 복용한다면 전문가 검토가 필요합니다."
+                    ))
+                    .evidence(List.of(AiInteractionEvidenceDto.builder()
+                            .source("BACKEND_FALLBACK")
+                            .text(fallbackReason)
+                            .build()))
+                    .disclaimer(disclaimer())
+                    .build();
+        }
+
+        List<AiInteractionWarningDto> warnings = rules.stream()
+                .map(rule -> AiInteractionWarningDto.builder()
+                        .title(rule.getIngredientNameA() + " + " + rule.getIngredientNameB() + " 병용 주의")
+                        .severity(normalizeRiskLevel(rule.getRiskLevel()))
+                        .items(List.of(
+                                rule.getItemNameA() != null ? rule.getItemNameA() : "",
+                                rule.getItemNameB() != null ? rule.getItemNameB() : ""
+                        ).stream().filter(value -> !value.isBlank()).toList())
+                        .reason(rule.getDescription() != null ? rule.getDescription() : "상호작용 가능성이 있어 주의가 필요합니다.")
+                        .build())
+                .toList();
+        List<AiInteractionEvidenceDto> evidence = new ArrayList<>();
+        evidence.add(AiInteractionEvidenceDto.builder()
+                .source("BACKEND_FALLBACK")
+                .text(fallbackReason)
+                .build());
+        evidence.addAll(rules.stream()
+                .map(rule -> AiInteractionEvidenceDto.builder()
+                        .source("DUR_RULE")
+                        .text(rule.getDescription() != null ? rule.getDescription() : "DUR 상호작용 룰")
+                        .build())
+                .toList());
+
+        return AiInteractionAnalyzeResponseDto.builder()
+                .requestId("fallback-" + UUID.randomUUID())
+                .status("fallback")
+                .riskLevel(highestRiskLevel(rules))
+                .summary("총 " + items.size() + "개 항목에서 " + rules.size() + "건의 상호작용 주의 항목이 확인되었습니다.")
+                .warnings(warnings)
+                .recommendations(List.of(
+                        "복용을 임의로 중단하거나 용량을 바꾸지 말고 의사 또는 약사와 상담하세요.",
+                        "같은 시간대에 함께 복용 중이라면 상담 전까지 복용 시간 조정이 필요한지 확인하세요.",
+                        "출혈, 호흡곤란, 심한 발진, 의식 저하 같은 증상이 있으면 즉시 의료기관을 방문하세요."
+                ))
+                .evidence(evidence)
+                .disclaimer(disclaimer())
+                .build();
+    }
+
+    private String highestRiskLevel(List<AiInteractionRuleDto> rules) {
+        int maxScore = 0;
+        String maxRisk = "NONE";
+        for (AiInteractionRuleDto rule : rules) {
+            String risk = normalizeRiskLevel(rule.getRiskLevel());
+            int score = riskScore(risk);
+            if (score > maxScore) {
+                maxScore = score;
+                maxRisk = risk;
+            }
+        }
+        return maxRisk;
+    }
+
+    private String normalizeRiskLevel(String riskLevel) {
+        if (riskLevel == null || riskLevel.isBlank()) {
+            return "CAUTION";
+        }
+        String normalized = riskLevel.trim().toUpperCase();
+        if (!List.of("CAUTION", "WARNING", "DANGER").contains(normalized)) {
+            return "CAUTION";
+        }
+        return normalized;
+    }
+
+    private int riskScore(String riskLevel) {
+        return switch (riskLevel) {
+            case "DANGER" -> 3;
+            case "WARNING" -> 2;
+            case "CAUTION" -> 1;
+            default -> 0;
+        };
+    }
+
+    private String disclaimer() {
+        return "이 분석은 참고용이며 진단이나 처방이 아닙니다. 복용 변경 전 의사 또는 약사와 상담하세요.";
     }
 
     private record CabinetIngredientSource(

@@ -15,6 +15,7 @@ import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import java.io.IOException;
+import java.time.Duration;
 
 @Component
 @RequiredArgsConstructor
@@ -23,6 +24,9 @@ public class PythonAiClient {
 
     @Value("${safepill.ai.base-url}")
     private String aiBaseUrl;
+
+    @Value("${safepill.ai.timeout-ms:5000}")
+    private long aiTimeoutMs;
 
     public AiIdentifyResponseDto identifyPill(MultipartFile image) {
         return postImage("/identify-upload", image, AiIdentifyResponseDto.class);
@@ -40,7 +44,7 @@ public class PythonAiClient {
                 .bodyValue(requestDto)
                 .retrieve()
                 .bodyToMono(AiInteractionAnalyzeResponseDto.class)
-                .block();
+                .block(Duration.ofMillis(aiTimeoutMs));
     }
 
     private <T> T postImage(String path, MultipartFile image, Class<T> responseType) {
@@ -62,7 +66,7 @@ public class PythonAiClient {
                     .body(BodyInserters.fromMultipartData(bodyBuilder.build()))
                     .retrieve()
                     .bodyToMono(responseType)
-                    .block();
+                    .block(Duration.ofMillis(aiTimeoutMs));
         } catch (IOException e) {
             throw new IllegalArgumentException("이미지 파일을 읽을 수 없습니다.");
         }

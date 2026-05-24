@@ -1,12 +1,16 @@
 package com.meta.safepill_be.medicine.dto;
 
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
 
 @Getter
+@Builder
 @NoArgsConstructor
+@AllArgsConstructor
 public class AiInteractionAnalyzeResponseDto {
     private String requestId;
     private String status;
