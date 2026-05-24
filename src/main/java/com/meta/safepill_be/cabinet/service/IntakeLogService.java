@@ -88,6 +88,16 @@ public class IntakeLogService {
                 .toList();
     }
 
+    @Transactional
+    public String deleteLog(String loginId, Long logId) {
+        User user = getUser(loginId);
+        IntakeLog log = intakeLogRepository.findById(logId)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 복약 기록입니다."));
+        validateOwner(log.getIntakeSchedule().getUserMedicationReg(), user);
+        intakeLogRepository.delete(log);
+        return "복약 기록이 삭제되었습니다.";
+    }
+
     private User getUser(String loginId) {
         return userRepository.findByLoginId(loginId)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));

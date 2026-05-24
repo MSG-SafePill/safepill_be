@@ -46,6 +46,14 @@ public class IntakeLogController {
         return ResponseEntity.ok(intakeLogService.getLogsByDate(loginId, date));
     }
 
+    @DeleteMapping("/{logId}")
+    public ResponseEntity<String> deleteLog(
+            @RequestHeader("Authorization") String token,
+            @PathVariable Long logId) {
+        String loginId = extractLoginId(token);
+        return ResponseEntity.ok(intakeLogService.deleteLog(loginId, logId));
+    }
+
     private String extractLoginId(String token) {
         String actualToken = token.replace("Bearer ", "");
         return jwtUtil.getLoginIdFromToken(actualToken);

@@ -29,6 +29,24 @@ public interface IntakeScheduleRepository extends JpaRepository<IntakeSchedule, 
             @Param("dayOfWeek") ScheduleDayOfWeek dayOfWeek);
 
     @Query("""
+            SELECT COUNT(s) > 0
+            FROM IntakeSchedule s
+            WHERE s.userMedicationReg.id = :userMedicationRegId
+              AND s.id <> :scheduleId
+              AND s.takeTime = :takeTime
+              AND (
+                    s.dayOfWeek = :dayOfWeek
+                    OR s.dayOfWeek = com.meta.safepill_be.cabinet.domain.ScheduleDayOfWeek.EVERYDAY
+                    OR :dayOfWeek = com.meta.safepill_be.cabinet.domain.ScheduleDayOfWeek.EVERYDAY
+                  )
+            """)
+    boolean existsDuplicateScheduleExceptId(
+            @Param("scheduleId") Long scheduleId,
+            @Param("userMedicationRegId") Long userMedicationRegId,
+            @Param("takeTime") LocalTime takeTime,
+            @Param("dayOfWeek") ScheduleDayOfWeek dayOfWeek);
+
+    @Query("""
             SELECT s
             FROM IntakeSchedule s
             JOIN FETCH s.userMedicationReg r

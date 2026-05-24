@@ -91,6 +91,43 @@ public class IntakeScheduleService {
     }
 
     @Transactional
+    public IntakeScheduleResponseDto updateSchedule(String loginId, Long scheduleId, IntakeScheduleRequestDto requestDto) {
+        User user = getUser(loginId);
+        IntakeSchedule schedule = intakeScheduleRepository.findById(scheduleId)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 복약 스케줄입니다."));
+        validateOwner(schedule.getUserMedicationReg(), user);
+
+        LocalTime takeTime = requestDto.getTakeTime() != null && !requestDto.getTakeTime().isBlank()
+                ? parseTakeTime(requestDto.getTakeTime())
+                : schedule.getTakeTime();
+        String dosage = requestDto.getDosage() != null && !requestDto.getDosage().isBlank()
+                ? validateDosage(requestDto.getDosage())
+                : schedule.getDosage();
+        ScheduleDayOfWeek dayOfWeek = schedule.getDayOfWeek();
+        if (requestDto.getDaysOfWeek() != null && !requestDto.getDaysOfWeek().isEmpty()) {
+            List<ScheduleDayOfWeek> daysOfWeek = parseDaysOfWeek(requestDto.getDaysOfWeek());
+            if (daysOfWeek.size() > 1) {
+                throw new IllegalArgumentException("스케줄 수정은 하나의 요일만 지정할 수 있습니다.");
+            }
+            dayOfWeek = daysOfWeek.get(0);
+        }
+
+        boolean duplicated = intakeScheduleRepository.existsDuplicateScheduleExceptId(
+                scheduleId,
+                schedule.getUserMedicationReg().getId(),
+                takeTime,
+                dayOfWeek);
+        if (duplicated) {
+            throw new IllegalArgumentException("이미 동일한 시간과 요일의 복약 스케줄이 존재합니다.");
+        }
+
+        schedule.setTakeTime(takeTime);
+        schedule.setDayOfWeek(dayOfWeek);
+        schedule.setDosage(dosage);
+        return toResponseDto(schedule);
+    }
+
+    @Transactional
     public String deleteSchedule(String loginId, Long scheduleId) {
         User user = getUser(loginId);
         IntakeSchedule schedule = intakeScheduleRepository.findById(scheduleId)

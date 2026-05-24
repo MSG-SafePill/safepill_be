@@ -51,6 +51,15 @@ public class IntakeScheduleController {
         return ResponseEntity.ok(intakeScheduleService.deleteSchedule(loginId, scheduleId));
     }
 
+    @PatchMapping("/{scheduleId}")
+    public ResponseEntity<IntakeScheduleResponseDto> updateSchedule(
+            @RequestHeader("Authorization") String token,
+            @PathVariable Long scheduleId,
+            @RequestBody IntakeScheduleRequestDto requestDto) {
+        String loginId = extractLoginId(token);
+        return ResponseEntity.ok(intakeScheduleService.updateSchedule(loginId, scheduleId, requestDto));
+    }
+
     private String extractLoginId(String token) {
         String actualToken = token.replace("Bearer ", "");
         return jwtUtil.getLoginIdFromToken(actualToken);
