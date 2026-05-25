@@ -12,6 +12,7 @@ import java.util.Optional;
 public interface SupplementMasterRepository extends JpaRepository<SupplementMaster, Long> {
     Optional<SupplementMaster> findByItemSeq(String itemSeq);
     Page<SupplementMaster> findBySupplementNameContaining(String supplementName, Pageable pageable);
+    List<SupplementMaster> findTop5BySupplementNameContaining(String supplementName);
     @EntityGraph(attributePaths = {"ingredients", "ingredients.ingredientMaster"})
     List<SupplementMaster> findByIdIn(List<Long> ids);
 }

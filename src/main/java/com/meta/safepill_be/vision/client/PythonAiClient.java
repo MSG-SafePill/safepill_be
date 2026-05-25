@@ -1,5 +1,7 @@
 package com.meta.safepill_be.vision.client;
 
+import com.meta.safepill_be.chatbot.dto.AiChatRequestDto;
+import com.meta.safepill_be.chatbot.dto.AiChatResponseDto;
 import com.meta.safepill_be.medicine.dto.AiInteractionAnalyzeRequestDto;
 import com.meta.safepill_be.medicine.dto.AiInteractionAnalyzeResponseDto;
 import com.meta.safepill_be.vision.dto.AiIdentifyResponseDto;
@@ -44,6 +46,17 @@ public class PythonAiClient {
                 .bodyValue(requestDto)
                 .retrieve()
                 .bodyToMono(AiInteractionAnalyzeResponseDto.class)
+                .block(Duration.ofMillis(aiTimeoutMs));
+    }
+
+    public AiChatResponseDto chat(AiChatRequestDto requestDto) {
+        return webClientBuilder.build()
+                .post()
+                .uri(aiBaseUrl + "/chat")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(requestDto)
+                .retrieve()
+                .bodyToMono(AiChatResponseDto.class)
                 .block(Duration.ofMillis(aiTimeoutMs));
     }
 
