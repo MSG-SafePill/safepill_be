@@ -117,8 +117,8 @@ public class IntakeLogService {
                 .scheduleId(schedule.getId())
                 .regId(reg.getId())
                 .itemName(resolveItemName(reg))
-                .takeTime(schedule.getTakeTime())
-                .dosage(schedule.getDosage())
+                .timeSlot(schedule.getTimeSlot())
+                .takeTime(schedule.getTimeSlot())
                 .status(log.getStatus())
                 .actualTime(log.getActualTime())
                 .build();

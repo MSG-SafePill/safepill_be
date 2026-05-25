@@ -5,7 +5,6 @@ import lombok.Builder;
 import lombok.Getter;
 
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 
 @Getter
 @Builder
@@ -14,8 +13,10 @@ public class IntakeLogResponseDto {
     private Long scheduleId;
     private Long regId;
     private String itemName;
-    private LocalTime takeTime;
-    private String dosage;
+    private String timeSlot;
+
+    // Backward-compatible response field for existing clients.
+    private String takeTime;
     private IntakeStatus status;
     private LocalDateTime actualTime;
 }

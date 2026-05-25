@@ -2,7 +2,6 @@ package com.meta.safepill_be.cabinet.service;
 
 import com.meta.safepill_be.cabinet.domain.IntakeSchedule;
 import com.meta.safepill_be.cabinet.domain.ItemType;
-import com.meta.safepill_be.cabinet.domain.ScheduleDayOfWeek;
 import com.meta.safepill_be.cabinet.domain.UserMedicationReg;
 import com.meta.safepill_be.cabinet.dto.IntakeScheduleRequestDto;
 import com.meta.safepill_be.cabinet.dto.IntakeScheduleResponseDto;
@@ -19,12 +18,6 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.DayOfWeek;
-import java.time.LocalDate;
-import java.time.LocalTime;
-import java.time.format.DateTimeParseException;
-import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 
 @Service
@@ -37,57 +30,34 @@ public class IntakeScheduleService {
     private final SupplementMasterRepository supplementRepository;
 
     @Transactional
-    public List<IntakeScheduleResponseDto> addSchedule(String loginId, Long regId, IntakeScheduleRequestDto requestDto) {
+    public IntakeScheduleResponseDto addSchedule(String loginId, Long regId, IntakeScheduleRequestDto requestDto) {
         User user = getUser(loginId);
         UserMedicationReg medicationReg = userMedicationRegRepository.findById(regId)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 약장 등록 정보입니다."));
         validateOwner(medicationReg, user);
 
-        LocalTime takeTime = parseTakeTime(requestDto.getTakeTime());
-        String dosage = validateDosage(requestDto.getDosage());
-        List<ScheduleDayOfWeek> daysOfWeek = parseDaysOfWeek(requestDto.getDaysOfWeek());
-        if (daysOfWeek.contains(ScheduleDayOfWeek.EVERYDAY) && daysOfWeek.size() > 1) {
-            throw new IllegalArgumentException("EVERYDAY는 다른 요일과 함께 등록할 수 없습니다.");
+        String timeSlot = validateTimeSlot(requestDto.resolveTimeSlot());
+        if (intakeScheduleRepository.existsDuplicateSchedule(regId, timeSlot)) {
+            throw new IllegalArgumentException("이미 동일한 시간대의 복약 스케줄이 존재합니다.");
         }
 
-        List<IntakeSchedule> schedules = new ArrayList<>();
-        for (ScheduleDayOfWeek dayOfWeek : daysOfWeek) {
-            boolean duplicated = intakeScheduleRepository.existsDuplicateSchedule(
-                    regId, takeTime, dayOfWeek);
-            if (duplicated) {
-                throw new IllegalArgumentException("이미 동일한 시간과 요일의 복약 스케줄이 존재합니다.");
-            }
-
-            IntakeSchedule schedule = new IntakeSchedule();
-            schedule.setUserMedicationReg(medicationReg);
-            schedule.setTakeTime(takeTime);
-            schedule.setDayOfWeek(dayOfWeek);
-            schedule.setDosage(dosage);
-            schedules.add(schedule);
-        }
-
-        return intakeScheduleRepository.saveAll(schedules).stream()
-                .sorted(Comparator.comparing(IntakeSchedule::getTakeTime))
-                .map(this::toResponseDto)
-                .toList();
+        IntakeSchedule schedule = new IntakeSchedule();
+        schedule.setUserMedicationReg(medicationReg);
+        schedule.setTimeSlot(timeSlot);
+        return toResponseDto(intakeScheduleRepository.save(schedule));
     }
 
     @Transactional(readOnly = true)
-    public List<IntakeScheduleResponseDto> getSchedulesByDay(String loginId, ScheduleDayOfWeek requestedDay) {
+    public List<IntakeScheduleResponseDto> getSchedules(String loginId) {
         User user = getUser(loginId);
-        ScheduleDayOfWeek dayOfWeek = requestedDay == null
-                ? ScheduleDayOfWeek.valueOf(LocalDate.now().getDayOfWeek().name())
-                : requestedDay;
-
-        return intakeScheduleRepository.findSchedulesForUserByDay(user.getId(), dayOfWeek).stream()
+        return intakeScheduleRepository.findSchedulesForUser(user.getId()).stream()
                 .map(this::toResponseDto)
                 .toList();
     }
 
     @Transactional(readOnly = true)
     public List<IntakeScheduleResponseDto> getTodaySchedules(String loginId) {
-        DayOfWeek today = LocalDate.now().getDayOfWeek();
-        return getSchedulesByDay(loginId, ScheduleDayOfWeek.valueOf(today.name()));
+        return getSchedules(loginId);
     }
 
     @Transactional
@@ -97,33 +67,19 @@ public class IntakeScheduleService {
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 복약 스케줄입니다."));
         validateOwner(schedule.getUserMedicationReg(), user);
 
-        LocalTime takeTime = requestDto.getTakeTime() != null && !requestDto.getTakeTime().isBlank()
-                ? parseTakeTime(requestDto.getTakeTime())
-                : schedule.getTakeTime();
-        String dosage = requestDto.getDosage() != null && !requestDto.getDosage().isBlank()
-                ? validateDosage(requestDto.getDosage())
-                : schedule.getDosage();
-        ScheduleDayOfWeek dayOfWeek = schedule.getDayOfWeek();
-        if (requestDto.getDaysOfWeek() != null && !requestDto.getDaysOfWeek().isEmpty()) {
-            List<ScheduleDayOfWeek> daysOfWeek = parseDaysOfWeek(requestDto.getDaysOfWeek());
-            if (daysOfWeek.size() > 1) {
-                throw new IllegalArgumentException("스케줄 수정은 하나의 요일만 지정할 수 있습니다.");
-            }
-            dayOfWeek = daysOfWeek.get(0);
-        }
+        String timeSlot = requestDto.resolveTimeSlot() != null && !requestDto.resolveTimeSlot().isBlank()
+                ? validateTimeSlot(requestDto.resolveTimeSlot())
+                : schedule.getTimeSlot();
 
         boolean duplicated = intakeScheduleRepository.existsDuplicateScheduleExceptId(
                 scheduleId,
                 schedule.getUserMedicationReg().getId(),
-                takeTime,
-                dayOfWeek);
+                timeSlot);
         if (duplicated) {
-            throw new IllegalArgumentException("이미 동일한 시간과 요일의 복약 스케줄이 존재합니다.");
+            throw new IllegalArgumentException("이미 동일한 시간대의 복약 스케줄이 존재합니다.");
         }
 
-        schedule.setTakeTime(takeTime);
-        schedule.setDayOfWeek(dayOfWeek);
-        schedule.setDosage(dosage);
+        schedule.setTimeSlot(timeSlot);
         return toResponseDto(schedule);
     }
 
@@ -149,39 +105,11 @@ public class IntakeScheduleService {
         }
     }
 
-    private LocalTime parseTakeTime(String takeTime) {
-        if (takeTime == null || takeTime.isBlank()) {
-            throw new IllegalArgumentException("복용 시간은 필수입니다.");
+    private String validateTimeSlot(String timeSlot) {
+        if (timeSlot == null || timeSlot.isBlank()) {
+            throw new IllegalArgumentException("복용 시간대는 필수입니다.");
         }
-        try {
-            return LocalTime.parse(takeTime);
-        } catch (DateTimeParseException e) {
-            throw new IllegalArgumentException("복용 시간은 HH:mm 형식이어야 합니다.");
-        }
-    }
-
-    private String validateDosage(String dosage) {
-        if (dosage == null || dosage.isBlank()) {
-            throw new IllegalArgumentException("복용량은 필수입니다.");
-        }
-        return dosage.trim();
-    }
-
-    private List<ScheduleDayOfWeek> parseDaysOfWeek(List<String> daysOfWeek) {
-        if (daysOfWeek == null || daysOfWeek.isEmpty()) {
-            throw new IllegalArgumentException("복용 요일은 하나 이상 선택해야 합니다.");
-        }
-
-        return daysOfWeek.stream()
-                .map(day -> {
-                    try {
-                        return ScheduleDayOfWeek.valueOf(day.trim().toUpperCase());
-                    } catch (RuntimeException e) {
-                        throw new IllegalArgumentException("복용 요일 값이 올바르지 않습니다: " + day);
-                    }
-                })
-                .distinct()
-                .toList();
+        return timeSlot.trim();
     }
 
     private IntakeScheduleResponseDto toResponseDto(IntakeSchedule schedule) {
@@ -190,9 +118,8 @@ public class IntakeScheduleService {
                 .scheduleId(schedule.getId())
                 .regId(reg.getId())
                 .itemName(resolveItemName(reg))
-                .takeTime(schedule.getTakeTime())
-                .dayOfWeek(schedule.getDayOfWeek())
-                .dosage(schedule.getDosage())
+                .timeSlot(schedule.getTimeSlot())
+                .takeTime(schedule.getTimeSlot())
                 .build();
     }
 

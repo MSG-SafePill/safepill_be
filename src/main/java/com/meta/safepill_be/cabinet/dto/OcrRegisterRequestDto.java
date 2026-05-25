@@ -22,6 +22,9 @@ public class OcrRegisterRequestDto {
     @Getter
     @NoArgsConstructor
     public static class Schedule {
+        private String timeSlot;
+
+        // Backward-compatible fields from OCR clients.
         private String takeTime;
         private List<String> daysOfWeek;
         private String dosage;

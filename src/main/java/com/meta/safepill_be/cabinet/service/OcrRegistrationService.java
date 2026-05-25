@@ -2,7 +2,6 @@ package com.meta.safepill_be.cabinet.service;
 
 import com.meta.safepill_be.cabinet.domain.IntakeSchedule;
 import com.meta.safepill_be.cabinet.domain.ItemType;
-import com.meta.safepill_be.cabinet.domain.ScheduleDayOfWeek;
 import com.meta.safepill_be.cabinet.domain.UserMedicationReg;
 import com.meta.safepill_be.cabinet.dto.IntakeScheduleResponseDto;
 import com.meta.safepill_be.cabinet.dto.OcrRegisterRequestDto;
@@ -19,7 +18,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -88,39 +86,24 @@ public class OcrRegistrationService {
 
         List<IntakeScheduleResponseDto> created = new ArrayList<>();
         for (OcrRegisterRequestDto.Schedule requestSchedule : schedules) {
-            LocalTime takeTime = LocalTime.parse(requestSchedule.getTakeTime());
-            String dosage = requestSchedule.getDosage() == null || requestSchedule.getDosage().isBlank()
-                    ? "처방전 확인 필요"
-                    : requestSchedule.getDosage().trim();
-            List<ScheduleDayOfWeek> days = parseDays(requestSchedule.getDaysOfWeek());
-
-            for (ScheduleDayOfWeek day : days) {
-                if (intakeScheduleRepository.existsDuplicateSchedule(reg.getId(), takeTime, day)) {
-                    continue;
-                }
-                IntakeSchedule schedule = new IntakeSchedule();
-                schedule.setUserMedicationReg(reg);
-                schedule.setTakeTime(takeTime);
-                schedule.setDayOfWeek(day);
-                schedule.setDosage(dosage);
-                created.add(toScheduleResponse(intakeScheduleRepository.save(schedule)));
+            String timeSlot = requestSchedule.getTimeSlot();
+            if (timeSlot == null || timeSlot.isBlank()) {
+                timeSlot = requestSchedule.getTakeTime();
             }
+            if (timeSlot == null || timeSlot.isBlank()) {
+                continue;
+            }
+            timeSlot = timeSlot.trim();
+
+            if (intakeScheduleRepository.existsDuplicateSchedule(reg.getId(), timeSlot)) {
+                continue;
+            }
+            IntakeSchedule schedule = new IntakeSchedule();
+            schedule.setUserMedicationReg(reg);
+            schedule.setTimeSlot(timeSlot);
+            created.add(toScheduleResponse(intakeScheduleRepository.save(schedule)));
         }
         return created;
-    }
-
-    private List<ScheduleDayOfWeek> parseDays(List<String> daysOfWeek) {
-        if (daysOfWeek == null || daysOfWeek.isEmpty()) {
-            return List.of(ScheduleDayOfWeek.EVERYDAY);
-        }
-        List<ScheduleDayOfWeek> days = daysOfWeek.stream()
-                .map(day -> ScheduleDayOfWeek.valueOf(day.trim().toUpperCase()))
-                .distinct()
-                .toList();
-        if (days.contains(ScheduleDayOfWeek.EVERYDAY) && days.size() > 1) {
-            throw new IllegalArgumentException("EVERYDAY는 다른 요일과 함께 등록할 수 없습니다.");
-        }
-        return days;
     }
 
     private void validateItemExists(ItemType itemType, Long itemId) {
@@ -138,9 +121,8 @@ public class OcrRegistrationService {
                 .scheduleId(schedule.getId())
                 .regId(reg.getId())
                 .itemName(resolveItemName(reg.getItem_type(), reg.getItemId()))
-                .takeTime(schedule.getTakeTime())
-                .dayOfWeek(schedule.getDayOfWeek())
-                .dosage(schedule.getDosage())
+                .timeSlot(schedule.getTimeSlot())
+                .takeTime(schedule.getTimeSlot())
                 .build();
     }
 

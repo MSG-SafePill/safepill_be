@@ -1,6 +1,5 @@
 package com.meta.safepill_be.cabinet.controller;
 
-import com.meta.safepill_be.cabinet.domain.ScheduleDayOfWeek;
 import com.meta.safepill_be.cabinet.dto.IntakeScheduleRequestDto;
 import com.meta.safepill_be.cabinet.dto.IntakeScheduleResponseDto;
 import com.meta.safepill_be.cabinet.service.IntakeScheduleService;
@@ -19,7 +18,7 @@ public class IntakeScheduleController {
     private final JwtUtil jwtUtil;
 
     @PostMapping("/{regId}")
-    public ResponseEntity<List<IntakeScheduleResponseDto>> registerSchedule(
+    public ResponseEntity<IntakeScheduleResponseDto> registerSchedule(
             @RequestHeader("Authorization") String token,
             @PathVariable Long regId,
             @RequestBody IntakeScheduleRequestDto requestDto) {
@@ -37,10 +36,9 @@ public class IntakeScheduleController {
     @GetMapping
     public ResponseEntity<List<IntakeScheduleResponseDto>> getSchedulesByDay(
             @RequestHeader("Authorization") String token,
-            @RequestParam("day") String day) {
+            @RequestParam(value = "day", required = false) String day) {
         String loginId = extractLoginId(token);
-        ScheduleDayOfWeek dayOfWeek = ScheduleDayOfWeek.valueOf(day.trim().toUpperCase());
-        return ResponseEntity.ok(intakeScheduleService.getSchedulesByDay(loginId, dayOfWeek));
+        return ResponseEntity.ok(intakeScheduleService.getSchedules(loginId));
     }
 
     @DeleteMapping("/{scheduleId}")

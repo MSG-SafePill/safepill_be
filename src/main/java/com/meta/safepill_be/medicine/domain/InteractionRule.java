@@ -15,7 +15,7 @@ public class InteractionRule {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "risk_level")
+    @Column(name = "risk_level", nullable = false)
     @Enumerated(EnumType.STRING)
     private RiskLevel riskLevel;
 
