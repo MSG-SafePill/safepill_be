@@ -38,7 +38,7 @@ public class SecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
         // 새 코드 추가 (Flutter의 바뀌는 포트, 127.0.0.1 모두 허용!)
         configuration.setAllowedOriginPatterns(List.of("*"));
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);
 
