@@ -54,6 +54,9 @@ public class User extends TimeStamped {
     @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private HealthProfile healthProfile;
 
+    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private NotificationSetting notificationSetting;
+
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ChatSession> chatSessions = new ArrayList<>();
 }
