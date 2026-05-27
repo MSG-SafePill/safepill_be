@@ -1,7 +1,6 @@
 package com.meta.safepill_be.cabinet.domain;
 
 import com.meta.safepill_be.common.domain.TimeStamped;
-import com.meta.safepill_be.user.domain.User;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;

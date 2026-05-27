@@ -3,7 +3,10 @@ package com.meta.safepill_be.user.service;
 import com.meta.safepill_be.user.domain.Provider;
 import com.meta.safepill_be.user.domain.User;
 import com.meta.safepill_be.user.dto.LoginRequestDto;
+import com.meta.safepill_be.user.dto.PasswordChangeRequestDto;
 import com.meta.safepill_be.user.dto.SignupRequestDto;
+import com.meta.safepill_be.user.dto.UserProfileResponseDto;
+import com.meta.safepill_be.user.dto.UserProfileUpdateRequestDto;
 import com.meta.safepill_be.user.repository.UserRepository;
 import com.meta.safepill_be.user.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
@@ -61,5 +64,71 @@ public class UserService {
     // 👇 UserService 안에 중복 여부만 리턴하는 메서드 추가!
     public boolean checkIdDuplication(String loginId) {
         return userRepository.existsByLoginId(loginId);
+    }
+
+    @Transactional(readOnly = true)
+    public UserProfileResponseDto getProfile(String loginId) {
+        User user = findUser(loginId);
+        return toProfileResponse(user);
+    }
+
+    @Transactional
+    public UserProfileResponseDto updateProfile(String loginId, UserProfileUpdateRequestDto requestDto) {
+        User user = findUser(loginId);
+        String username = requestDto.getUsername() == null ? "" : requestDto.getUsername().trim();
+        if (username.isEmpty()) {
+            throw new IllegalArgumentException("닉네임은 필수입니다.");
+        }
+        if (username.length() > 30) {
+            throw new IllegalArgumentException("닉네임은 30자 이하로 입력해주세요.");
+        }
+        user.setUsername(username);
+        return toProfileResponse(user);
+    }
+
+    @Transactional
+    public String changePassword(String loginId, PasswordChangeRequestDto requestDto) {
+        User user = findUser(loginId);
+        if (user.getProvider() != Provider.Local) {
+            throw new IllegalArgumentException("소셜 로그인 계정은 비밀번호를 변경할 수 없습니다.");
+        }
+
+        String currentPassword = requestDto.getCurrentPassword();
+        String newPassword = requestDto.getNewPassword();
+        if (currentPassword == null || currentPassword.isBlank()) {
+            throw new IllegalArgumentException("현재 비밀번호는 필수입니다.");
+        }
+        if (newPassword == null || newPassword.isBlank()) {
+            throw new IllegalArgumentException("새 비밀번호는 필수입니다.");
+        }
+        if (newPassword.length() < 8) {
+            throw new IllegalArgumentException("새 비밀번호는 8자 이상이어야 합니다.");
+        }
+        if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
+            throw new IllegalArgumentException("현재 비밀번호가 일치하지 않습니다.");
+        }
+        if (passwordEncoder.matches(newPassword, user.getPassword())) {
+            throw new IllegalArgumentException("새 비밀번호는 현재 비밀번호와 달라야 합니다.");
+        }
+
+        user.setPassword(passwordEncoder.encode(newPassword));
+        return "비밀번호가 변경되었습니다.";
+    }
+
+    private User findUser(String loginId) {
+        return userRepository.findByLoginId(loginId)
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+    }
+
+    private UserProfileResponseDto toProfileResponse(User user) {
+        return UserProfileResponseDto.builder()
+                .id(user.getId())
+                .loginId(user.getLoginId())
+                .username(user.getUsername())
+                .email(user.getEmail())
+                .gender(user.getGender())
+                .birthDate(user.getBirthDate())
+                .provider(user.getProvider())
+                .build();
     }
 }

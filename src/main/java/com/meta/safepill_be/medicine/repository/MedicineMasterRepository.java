@@ -12,7 +12,10 @@ import java.util.Optional;
 public interface MedicineMasterRepository extends JpaRepository<MedicineMaster, Long> {
     Optional<MedicineMaster> findByItemSeq(String itemSeq);
     Page<MedicineMaster> findByMedicineNameContaining(String medicineName, Pageable pageable);
+    List<MedicineMaster> findTop5ByMedicineNameContaining(String medicineName);
     @EntityGraph(attributePaths = {"ingredients", "ingredients.ingredientMaster"})
     List<MedicineMaster> findTop5ByMedicineNameContainingIgnoreCase(String medicineName);
+    @EntityGraph(attributePaths = {"ingredients", "ingredients.ingredientMaster"})
+    List<MedicineMaster> findByIdIn(List<Long> ids);
     List<MedicineMaster> findByEfficacyIsNull();
 }

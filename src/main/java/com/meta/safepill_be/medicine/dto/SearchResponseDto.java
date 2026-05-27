@@ -10,4 +10,8 @@ import java.util.List;
 public class SearchResponseDto {
     private List<MedicineSimpleDto> medicines;
     private List<SupplementSimpleDto> supplements;
+    private int page;
+    private int size;
+    private boolean hasNext;
+    private long totalElements;
 }

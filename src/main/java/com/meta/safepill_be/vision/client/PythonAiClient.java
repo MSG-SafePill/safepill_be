@@ -1,5 +1,9 @@
 package com.meta.safepill_be.vision.client;
 
+import com.meta.safepill_be.chatbot.dto.AiChatRequestDto;
+import com.meta.safepill_be.chatbot.dto.AiChatResponseDto;
+import com.meta.safepill_be.medicine.dto.AiInteractionAnalyzeRequestDto;
+import com.meta.safepill_be.medicine.dto.AiInteractionAnalyzeResponseDto;
 import com.meta.safepill_be.vision.dto.AiIdentifyResponseDto;
 import com.meta.safepill_be.vision.dto.AiPrescriptionOcrResponseDto;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +17,7 @@ import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import java.io.IOException;
+import java.time.Duration;
 
 @Component
 @RequiredArgsConstructor
@@ -22,12 +27,37 @@ public class PythonAiClient {
     @Value("${safepill.ai.base-url}")
     private String aiBaseUrl;
 
+    @Value("${safepill.ai.timeout-ms:5000}")
+    private long aiTimeoutMs;
+
     public AiIdentifyResponseDto identifyPill(MultipartFile image) {
         return postImage("/identify-upload", image, AiIdentifyResponseDto.class);
     }
 
     public AiPrescriptionOcrResponseDto scanPrescription(MultipartFile image) {
         return postImage("/prescription-ocr-upload", image, AiPrescriptionOcrResponseDto.class);
+    }
+
+    public AiInteractionAnalyzeResponseDto analyzeInteraction(AiInteractionAnalyzeRequestDto requestDto) {
+        return webClientBuilder.build()
+                .post()
+                .uri(aiBaseUrl + "/interaction/analyze")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(requestDto)
+                .retrieve()
+                .bodyToMono(AiInteractionAnalyzeResponseDto.class)
+                .block(Duration.ofMillis(aiTimeoutMs));
+    }
+
+    public AiChatResponseDto chat(AiChatRequestDto requestDto) {
+        return webClientBuilder.build()
+                .post()
+                .uri(aiBaseUrl + "/chat")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(requestDto)
+                .retrieve()
+                .bodyToMono(AiChatResponseDto.class)
+                .block(Duration.ofMillis(aiTimeoutMs));
     }
 
     private <T> T postImage(String path, MultipartFile image, Class<T> responseType) {
@@ -49,7 +79,7 @@ public class PythonAiClient {
                     .body(BodyInserters.fromMultipartData(bodyBuilder.build()))
                     .retrieve()
                     .bodyToMono(responseType)
-                    .block();
+                    .block(Duration.ofMillis(aiTimeoutMs));
         } catch (IOException e) {
             throw new IllegalArgumentException("이미지 파일을 읽을 수 없습니다.");
         }

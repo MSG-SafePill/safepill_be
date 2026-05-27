@@ -19,7 +19,7 @@ public class ChatMessage extends TimeStamped {
     @Column(columnDefinition = "TEXT", nullable = false)
     private String contents;
 
-    @Column(name = "sender_role")
+    @Column(name = "sender_role", nullable = false)
     @Enumerated(EnumType.STRING)
     private SenderRole sender_role;
 
