@@ -2,6 +2,7 @@ package com.meta.safepill_be.chatbot.service;
 
 import com.meta.safepill_be.cabinet.domain.ItemType;
 import com.meta.safepill_be.cabinet.domain.UserMedicationReg;
+import com.meta.safepill_be.cabinet.repository.IntakeScheduleRepository;
 import com.meta.safepill_be.cabinet.repository.UserMedicationRegRepository;
 import com.meta.safepill_be.chatbot.domain.ChatMessage;
 import com.meta.safepill_be.chatbot.domain.ChatSession;
@@ -14,6 +15,7 @@ import com.meta.safepill_be.medicine.domain.SupplementMaster;
 import com.meta.safepill_be.medicine.repository.MedicineMasterRepository;
 import com.meta.safepill_be.medicine.repository.SupplementMasterRepository;
 import com.meta.safepill_be.user.domain.User;
+import com.meta.safepill_be.user.repository.HealthProfileRepository;
 import com.meta.safepill_be.user.repository.UserRepository;
 import com.meta.safepill_be.vision.client.PythonAiClient;
 import lombok.RequiredArgsConstructor;
@@ -23,7 +25,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -32,6 +37,8 @@ public class ChatService {
     private final UserMedicationRegRepository userMedicationRegRepository;
     private final MedicineMasterRepository medicineRepository;
     private final SupplementMasterRepository supplementRepository;
+    private final IntakeScheduleRepository intakeScheduleRepository;
+    private final HealthProfileRepository healthProfileRepository;
     private final ChatSessionRepository chatSessionRepository;
     private final ChatMessageRepository chatMessageRepository;
     private final PythonAiClient pythonAiClient;
@@ -72,8 +79,12 @@ public class ChatService {
         ChatSession session = getOwnedSession(sessionId, user);
         ChatMessage userMessage = saveMessage(session, SenderRole.User, requestDto.getQuestion().trim());
 
-        List<String> referencedPills = resolveReferencedPills(user, requestDto);
-        AiAnswer aiAnswer = answerWithAi(requestDto.getQuestion().trim(), referencedPills);
+        CabinetContext cabinetContext = resolveCabinetContext(user, requestDto);
+        AiAnswer aiAnswer = answerWithAi(
+                requestDto.getQuestion().trim(),
+                cabinetContext.referencedPills(),
+                cabinetContext.contextItems(),
+                cabinetContext.userProfile());
         ChatMessage assistantMessage = saveMessage(session, SenderRole.System, aiAnswer.answer());
 
         return ChatAnswerResponseDto.builder()
@@ -84,7 +95,12 @@ public class ChatService {
                 .build();
     }
 
-    private AiAnswer answerWithAi(String question, List<String> referencedPills) {
+    private AiAnswer answerWithAi(
+            String question,
+            List<String> referencedPills,
+            List<Map<String, Object>> contextItems,
+            Map<String, Object> userProfile
+    ) {
         if (referencedPills.isEmpty()) {
             return new AiAnswer(
                     "내 약장에 등록된 약품이 없거나 상담에 사용할 약품 후보가 없습니다. 약을 등록한 뒤 다시 질문해주세요.",
@@ -96,6 +112,8 @@ public class ChatService {
             AiChatResponseDto response = pythonAiClient.chat(AiChatRequestDto.builder()
                     .question(question)
                     .identifiedPills(referencedPills)
+                    .contextItems(contextItems)
+                    .userProfile(userProfile)
                     .build());
             if (response == null || response.getAnswer() == null || response.getAnswer().isBlank()) {
                 return fallbackAnswer(referencedPills);
@@ -118,16 +136,19 @@ public class ChatService {
                 true);
     }
 
-    private List<String> resolveReferencedPills(User user, ChatQuestionRequestDto requestDto) {
+    private CabinetContext resolveCabinetContext(User user, ChatQuestionRequestDto requestDto) {
         if (requestDto.getUseMyCabinet() == null || requestDto.getUseMyCabinet()) {
-            return resolveCabinetItemNames(user);
+            List<UserMedicationReg> registrations = userMedicationRegRepository.findByUserId(user.getId());
+            List<String> names = resolveCabinetItemNames(registrations);
+            return new CabinetContext(names, buildContextItems(user, registrations), buildUserProfile(user));
         }
-        return requestDto.getIdentifiedPills() == null ? List.of() : requestDto.getIdentifiedPills();
+        List<String> identifiedPills = requestDto.getIdentifiedPills() == null ? List.of() : requestDto.getIdentifiedPills();
+        return new CabinetContext(identifiedPills, List.of(), buildUserProfile(user));
     }
 
-    private List<String> resolveCabinetItemNames(User user) {
+    private List<String> resolveCabinetItemNames(List<UserMedicationReg> registrations) {
         List<String> names = new ArrayList<>();
-        for (UserMedicationReg reg : userMedicationRegRepository.findByUserId(user.getId())) {
+        for (UserMedicationReg reg : registrations) {
             if (reg.getItem_type() == ItemType.MEDICINE) {
                 medicineRepository.findById(reg.getItemId())
                         .map(MedicineMaster::getMedicineName)
@@ -139,6 +160,65 @@ public class ChatService {
             }
         }
         return names;
+    }
+
+    private List<Map<String, Object>> buildContextItems(User user, List<UserMedicationReg> registrations) {
+        Map<Long, List<String>> intakeTimesByRegId = intakeScheduleRepository.findSchedulesForUser(user.getId()).stream()
+                .collect(Collectors.groupingBy(
+                        schedule -> schedule.getUserMedicationReg().getId(),
+                        Collectors.mapping(schedule -> schedule.getTimeSlot(), Collectors.toList())
+                ));
+
+        List<Map<String, Object>> items = new ArrayList<>();
+        for (UserMedicationReg reg : registrations) {
+            if (reg.getItem_type() == ItemType.MEDICINE) {
+                medicineRepository.findById(reg.getItemId()).ifPresent(medicine -> {
+                    Map<String, Object> item = new HashMap<>();
+                    item.put("itemName", medicine.getMedicineName());
+                    item.put("itemType", ItemType.MEDICINE.name());
+                    item.put("manufacturer", medicine.getMedicineManufacturer());
+                    item.put("ingredients", medicine.getIngredients().stream()
+                            .map(ingredient -> Map.<String, Object>of(
+                                    "name", ingredient.getIngredientMaster().getIngredientName(),
+                                    "dosage", ingredient.getDosage() != null ? ingredient.getDosage().toPlainString() : ""
+                            ))
+                            .toList());
+                    item.put("intakeTimes", intakeTimesByRegId.getOrDefault(reg.getId(), List.of()));
+                    item.put("efficacy", medicine.getEfficacy());
+                    item.put("precautions", medicine.getPrecautions());
+                    items.add(item);
+                });
+            } else if (reg.getItem_type() == ItemType.SUPPLEMENT) {
+                supplementRepository.findById(reg.getItemId()).ifPresent(supplement -> {
+                    Map<String, Object> item = new HashMap<>();
+                    item.put("itemName", supplement.getSupplementName());
+                    item.put("itemType", ItemType.SUPPLEMENT.name());
+                    item.put("manufacturer", supplement.getSupplementManufacturer());
+                    item.put("ingredients", supplement.getIngredients().stream()
+                            .map(ingredient -> Map.<String, Object>of(
+                                    "name", ingredient.getIngredientMaster().getIngredientName(),
+                                    "dosage", ingredient.getDosage() != null ? ingredient.getDosage().toPlainString() : ""
+                            ))
+                            .toList());
+                    item.put("intakeTimes", intakeTimesByRegId.getOrDefault(reg.getId(), List.of()));
+                    item.put("efficacy", supplement.getEfficacy());
+                    item.put("precautions", supplement.getPrecautions());
+                    items.add(item);
+                });
+            }
+        }
+        return items;
+    }
+
+    private Map<String, Object> buildUserProfile(User user) {
+        Map<String, Object> profile = new HashMap<>();
+        profile.put("gender", user.getGender() != null ? user.getGender().name() : null);
+        profile.put("birthDate", user.getBirthDate() != null ? user.getBirthDate().toString() : null);
+        healthProfileRepository.findByUserId(user.getId()).ifPresent(healthProfile -> {
+            profile.put("disease", healthProfile.getDisease());
+            profile.put("allergy", healthProfile.getAllergy());
+        });
+        return profile;
     }
 
     private ChatMessage saveMessage(ChatSession session, SenderRole senderRole, String contents) {
@@ -182,5 +262,12 @@ public class ChatService {
     }
 
     private record AiAnswer(String answer, List<String> referencedPills, boolean fallback) {
+    }
+
+    private record CabinetContext(
+            List<String> referencedPills,
+            List<Map<String, Object>> contextItems,
+            Map<String, Object> userProfile
+    ) {
     }
 }

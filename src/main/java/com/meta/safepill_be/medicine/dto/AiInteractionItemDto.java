@@ -11,6 +11,7 @@ public class AiInteractionItemDto {
     private String itemName;
     private String itemType;
     private List<AiInteractionIngredientDto> ingredients;
+    private List<String> intakeTimes;
     private String efficacy;
     private String precautions;
 }

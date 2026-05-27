@@ -2,6 +2,7 @@ package com.meta.safepill_be.medicine.service;
 
 import com.meta.safepill_be.cabinet.domain.ItemType;
 import com.meta.safepill_be.cabinet.domain.UserMedicationReg;
+import com.meta.safepill_be.cabinet.repository.IntakeScheduleRepository;
 import com.meta.safepill_be.cabinet.repository.UserMedicationRegRepository;
 import com.meta.safepill_be.medicine.domain.IngredientMaster;
 import com.meta.safepill_be.medicine.domain.InteractionRule;
@@ -53,6 +54,7 @@ public class InteractionService {
     private final MedicineMasterRepository medicineMasterRepository;
     private final SupplementMasterRepository supplementMasterRepository;
     private final UserMedicationRegRepository userMedicationRegRepository;
+    private final IntakeScheduleRepository intakeScheduleRepository;
     private final UserRepository userRepository;
     private final HealthProfileRepository healthProfileRepository;
     private final PythonAiClient pythonAiClient;
@@ -267,7 +269,8 @@ public class InteractionService {
         User user = userRepository.findByLoginId(loginId)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
         List<UserMedicationReg> registrations = userMedicationRegRepository.findByUserId(user.getId());
-        List<AiInteractionItemDto> items = buildAiInteractionItems(registrations);
+        Map<Long, List<String>> intakeTimesByRegId = buildIntakeTimesByRegId(user.getId());
+        List<AiInteractionItemDto> items = buildAiInteractionItems(registrations, intakeTimesByRegId);
         List<AiInteractionRuleDto> rules = analyzeMyCabinetInteractions(loginId).stream()
                 .map(result -> AiInteractionRuleDto.builder()
                         .itemNameA(result.getItemNameA())
@@ -342,7 +345,10 @@ public class InteractionService {
         return sources;
     }
 
-    private List<AiInteractionItemDto> buildAiInteractionItems(List<UserMedicationReg> registrations) {
+    private List<AiInteractionItemDto> buildAiInteractionItems(
+            List<UserMedicationReg> registrations,
+            Map<Long, List<String>> intakeTimesByRegId
+    ) {
         Map<Long, UserMedicationReg> medicineRegsByItemId = registrations.stream()
                 .filter(reg -> reg.getItem_type() == ItemType.MEDICINE)
                 .collect(Collectors.toMap(UserMedicationReg::getItemId, Function.identity(), (left, right) -> left));
@@ -364,6 +370,7 @@ public class InteractionService {
                                     .dosage(ingredient.getDosage() != null ? ingredient.getDosage().toPlainString() : null)
                                     .build())
                             .collect(Collectors.toList()))
+                    .intakeTimes(intakeTimesByRegId.getOrDefault(medicineRegsByItemId.get(medicine.getId()).getId(), List.of()))
                     .efficacy(medicine.getEfficacy())
                     .precautions(medicine.getPrecautions())
                     .build());
@@ -382,12 +389,21 @@ public class InteractionService {
                                     .dosage(ingredient.getDosage() != null ? ingredient.getDosage().toPlainString() : null)
                                     .build())
                             .collect(Collectors.toList()))
+                    .intakeTimes(intakeTimesByRegId.getOrDefault(supplementRegsByItemId.get(supplement.getId()).getId(), List.of()))
                     .efficacy(supplement.getEfficacy())
                     .precautions(supplement.getPrecautions())
                     .build());
         }
 
         return items;
+    }
+
+    private Map<Long, List<String>> buildIntakeTimesByRegId(Long userId) {
+        return intakeScheduleRepository.findSchedulesForUser(userId).stream()
+                .collect(Collectors.groupingBy(
+                        schedule -> schedule.getUserMedicationReg().getId(),
+                        Collectors.mapping(schedule -> schedule.getTimeSlot(), Collectors.toList())
+                ));
     }
 
     private Map<String, Object> buildUserProfile(User user) {
@@ -416,6 +432,9 @@ public class InteractionService {
                     .summary("분석할 약품 또는 영양제가 2개 미만입니다.")
                     .warnings(List.of())
                     .recommendations(List.of("새로운 약이나 영양제를 추가하기 전에는 의사 또는 약사와 상담하세요."))
+                    .scheduleRecommendations(List.of())
+                    .foodWarnings(List.of())
+                    .consultationGuidance(List.of("새 약을 추가하거나 처방이 변경되면 의사 또는 약사에게 현재 복용 목록을 보여주세요."))
                     .evidence(List.of(AiInteractionEvidenceDto.builder()
                             .source("BACKEND_FALLBACK")
                             .text(fallbackReason)
@@ -435,6 +454,9 @@ public class InteractionService {
                             "새로운 약이나 영양제를 추가하기 전에는 현재 복용 목록을 의사 또는 약사에게 보여주세요.",
                             "증상 변화가 있거나 여러 약을 장기간 함께 복용한다면 전문가 검토가 필요합니다."
                     ))
+                    .scheduleRecommendations(buildScheduleRecommendations(items, rules))
+                    .foodWarnings(List.of("현재 데이터 기준으로 명확한 음식 상호작용은 확인되지 않았습니다. 술이나 새 영양제를 추가할 때는 전문가에게 확인하세요."))
+                    .consultationGuidance(List.of("임신, 수유, 신장/간 질환, 심한 알레르기 병력이 있으면 복용 전 상담이 필요합니다."))
                     .evidence(List.of(AiInteractionEvidenceDto.builder()
                             .source("BACKEND_FALLBACK")
                             .text(fallbackReason)
@@ -477,9 +499,35 @@ public class InteractionService {
                         "같은 시간대에 함께 복용 중이라면 상담 전까지 복용 시간 조정이 필요한지 확인하세요.",
                         "출혈, 호흡곤란, 심한 발진, 의식 저하 같은 증상이 있으면 즉시 의료기관을 방문하세요."
                 ))
+                .scheduleRecommendations(buildScheduleRecommendations(items, rules))
+                .foodWarnings(List.of(
+                        "상호작용 위험이 확인된 조합은 술이나 새 영양제를 함께 추가하지 말고 전문가에게 먼저 확인하세요.",
+                        "철분, 칼슘, 마그네슘 같은 미네랄은 일부 약의 흡수를 방해할 수 있어 복용 간격 확인이 필요합니다."
+                ))
+                .consultationGuidance(List.of(
+                        "DANGER 또는 WARNING 조합은 의사 또는 약사 상담 전까지 임의로 같이 복용하지 마세요.",
+                        "출혈, 호흡곤란, 심한 발진, 실신, 의식 저하 같은 증상이 있으면 즉시 의료기관을 방문하세요."
+                ))
                 .evidence(evidence)
                 .disclaimer(disclaimer())
                 .build();
+    }
+
+    private List<String> buildScheduleRecommendations(List<AiInteractionItemDto> items, List<AiInteractionRuleDto> rules) {
+        List<String> recommendations = new ArrayList<>();
+        boolean hasAnySchedule = items.stream()
+                .anyMatch(item -> item.getIntakeTimes() != null && !item.getIntakeTimes().isEmpty());
+        if (!hasAnySchedule) {
+            recommendations.add("등록된 복용 시간이 없습니다. 복용 시간을 등록하면 같은 시간대 병용 여부를 더 정확히 확인할 수 있습니다.");
+            return recommendations;
+        }
+
+        recommendations.add("복용 시간이 같은 약이나 영양제는 상호작용 경고가 있는지 먼저 확인하세요.");
+        if (!rules.isEmpty()) {
+            recommendations.add("상호작용 주의 조합은 같은 시간대 복용 여부를 의사 또는 약사에게 확인한 뒤 조정하세요.");
+        }
+        recommendations.add("처방전에서 식전/식후 지시가 있는 약은 해당 지시를 우선하고, 임의로 시간을 바꾸지 마세요.");
+        return recommendations;
     }
 
     private String highestRiskLevel(List<AiInteractionRuleDto> rules) {

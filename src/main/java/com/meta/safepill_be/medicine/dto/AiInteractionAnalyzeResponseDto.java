@@ -18,6 +18,9 @@ public class AiInteractionAnalyzeResponseDto {
     private String summary;
     private List<AiInteractionWarningDto> warnings;
     private List<String> recommendations;
+    private List<String> scheduleRecommendations;
+    private List<String> foodWarnings;
+    private List<String> consultationGuidance;
     private List<AiInteractionEvidenceDto> evidence;
     private String disclaimer;
 }
