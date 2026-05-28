@@ -80,11 +80,13 @@ public class ChatService {
         ChatMessage userMessage = saveMessage(session, SenderRole.User, requestDto.getQuestion().trim());
 
         CabinetContext cabinetContext = resolveCabinetContext(user, requestDto);
-        AiAnswer aiAnswer = answerWithAi(
-                requestDto.getQuestion().trim(),
-                cabinetContext.referencedPills(),
-                cabinetContext.contextItems(),
-                cabinetContext.userProfile());
+        AiAnswer aiAnswer = isCabinetListQuestion(requestDto.getQuestion())
+                ? answerCabinetList(cabinetContext.referencedPills())
+                : answerWithAi(
+                        requestDto.getQuestion().trim(),
+                        cabinetContext.referencedPills(),
+                        cabinetContext.contextItems(),
+                        cabinetContext.userProfile());
         ChatMessage assistantMessage = saveMessage(session, SenderRole.System, aiAnswer.answer());
 
         return ChatAnswerResponseDto.builder()
@@ -134,6 +136,28 @@ public class ChatService {
                         + "입니다. 복용 변경 전 의사 또는 약사와 상담하세요.",
                 referencedPills,
                 true);
+    }
+
+    private boolean isCabinetListQuestion(String question) {
+        String normalized = question.replaceAll("\\s+", "").toLowerCase();
+        return (normalized.contains("약장") || normalized.contains("등록된약") || normalized.contains("복용중"))
+                && (normalized.contains("목록")
+                || normalized.contains("리스트")
+                || normalized.contains("뭐")
+                || normalized.contains("무엇")
+                || normalized.contains("알려")
+                || normalized.contains("보여")
+                || normalized.contains("조회"));
+    }
+
+    private AiAnswer answerCabinetList(List<String> referencedPills) {
+        if (referencedPills.isEmpty()) {
+            return new AiAnswer("내 약장에 등록된 약품이나 영양제가 없습니다.", List.of(), false);
+        }
+        return new AiAnswer(
+                "내 약장에는 " + String.join(", ", referencedPills) + "이(가) 등록되어 있습니다.",
+                referencedPills,
+                false);
     }
 
     private CabinetContext resolveCabinetContext(User user, ChatQuestionRequestDto requestDto) {

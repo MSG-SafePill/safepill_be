@@ -51,6 +51,7 @@ public class UserMedicationService {
             throw new IllegalArgumentException("타입은 MEDICINE 또는 SUPPLEMENT 여야 합니다.");
         }
         medicationReg.setItemId(requestDto.getItemId());
+        medicationReg.setSupplyDays(normalizeSupplyDays(requestDto.getSupplyDays()));
         ItemType selectedType = ItemType.valueOf(requestDto.getType().toUpperCase());
         boolean isDuplicate = userMedicationRegRepository.isAlreadyRegistered(user, selectedType, requestDto.getItemId());
         if (isDuplicate) {
@@ -74,6 +75,7 @@ public class UserMedicationService {
                         .regId(reg.getId())
                         .type(reg.getItem_type())
                         .itemId(reg.getItemId())
+                        .supplyDays(reg.getSupplyDays())
                         .itemName(medicine != null ? medicine.getMedicineName() : "알 수 없는 약품")
                         .manufacturer(medicine != null ? medicine.getMedicineManufacturer() : null)
                         .imageUrl(medicine != null && medicine.getAppearanceInfo() != null ? medicine.getAppearanceInfo().getImageUrl() : null)
@@ -89,6 +91,7 @@ public class UserMedicationService {
                         .regId(reg.getId())
                         .type(reg.getItem_type())
                         .itemId(reg.getItemId())
+                        .supplyDays(reg.getSupplyDays())
                         .itemName(supplement != null ? supplement.getSupplementName() : "알 수 없는 영양제")
                         .manufacturer(supplement != null ? supplement.getSupplementManufacturer() : null)
                         .imageUrl(supplement != null && supplement.getAppearanceInfo() != null ? supplement.getAppearanceInfo().getImageUrl() : null)
@@ -103,10 +106,21 @@ public class UserMedicationService {
                     .regId(reg.getId())
                     .type(reg.getItem_type())
                     .itemId(reg.getItemId())
+                    .supplyDays(reg.getSupplyDays())
                     .itemName("알 수 없는 항목")
                     .ingredients(List.of())
                     .build();
         }).collect(Collectors.toList());
+    }
+
+    private Integer normalizeSupplyDays(Integer supplyDays) {
+        if (supplyDays == null) {
+            return null;
+        }
+        if (supplyDays < 1) {
+            throw new IllegalArgumentException("처방/구매 일수는 1일 이상이어야 합니다.");
+        }
+        return supplyDays;
     }
 
     @Transactional

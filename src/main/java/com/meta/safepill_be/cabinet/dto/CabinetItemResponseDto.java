@@ -14,6 +14,7 @@ public class CabinetItemResponseDto {
     private Long regId;
     private ItemType type;
     private Long itemId;
+    private Integer supplyDays;
     private String itemName;
     private String manufacturer;
     private String imageUrl;

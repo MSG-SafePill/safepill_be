@@ -372,6 +372,7 @@ CREATE TABLE public.user_medication_reg (
     item_type character varying(255) NOT NULL,
     user_id bigint NOT NULL,
     item_id bigint NOT NULL,
+    supply_days integer,
     CONSTRAINT user_medication_reg_item_type_check CHECK (((item_type)::text = ANY ((ARRAY['MEDICINE'::character varying, 'SUPPLEMENT'::character varying])::text[])))
 );
 
@@ -4921,9 +4922,9 @@ COPY public.supplement_master (id, appearance_info, efficacy, intake_method, ite
 -- Data for Name: user_medication_reg; Type: TABLE DATA; Schema: public; Owner: -
 --
 
-COPY public.user_medication_reg (id, item_type, user_id, item_id) FROM stdin;
-2	MEDICINE	1	1
-3	MEDICINE	1	1
+COPY public.user_medication_reg (id, item_type, user_id, item_id, supply_days) FROM stdin;
+2	MEDICINE	1	1	30
+3	MEDICINE	1	1	30
 \.
 
 

@@ -95,6 +95,7 @@ erDiagram
         bigint user_id FK
         enum item_type "MEDICINE, SUPPLEMENT"
         bigint item_id "logical polymorphic reference"
+        int supply_days
     }
 
     intake_schedule {

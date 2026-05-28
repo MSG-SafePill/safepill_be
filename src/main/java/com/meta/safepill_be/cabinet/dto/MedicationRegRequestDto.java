@@ -8,4 +8,5 @@ import lombok.Setter;
 public class MedicationRegRequestDto {
     private String type;
     private Long itemId;
+    private Integer supplyDays;
 }

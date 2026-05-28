@@ -26,6 +26,9 @@ public class UserMedicationReg {
     @Column(name = "item_id", nullable = false)
     private Long itemId;
 
+    @Column(name = "supply_days")
+    private Integer supplyDays;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
