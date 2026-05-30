@@ -37,7 +37,7 @@ public interface IntakeScheduleRepository extends JpaRepository<IntakeSchedule, 
             FROM IntakeSchedule s
             JOIN FETCH s.userMedicationReg r
             WHERE r.user.id = :userId
-            ORDER BY s.timeSlot ASC
+            ORDER BY CASE WHEN UPPER(s.timeSlot) = 'ANYTIME' THEN 0 ELSE 1 END, s.timeSlot ASC
             """)
     List<IntakeSchedule> findSchedulesForUser(@Param("userId") Long userId);
 }
