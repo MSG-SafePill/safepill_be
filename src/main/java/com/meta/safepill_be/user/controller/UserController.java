@@ -1,6 +1,7 @@
 package com.meta.safepill_be.user.controller;
 
 import com.meta.safepill_be.user.dto.LoginRequestDto;
+import com.meta.safepill_be.user.dto.GoogleLoginRequestDto;
 import com.meta.safepill_be.user.dto.PasswordChangeRequestDto;
 import com.meta.safepill_be.user.dto.SignupRequestDto;
 import com.meta.safepill_be.user.dto.UserProfileResponseDto;
@@ -32,6 +33,11 @@ public class UserController {
     public ResponseEntity<String> login(@RequestBody LoginRequestDto requestDto) {
         String result = userService.login(requestDto);
         return ResponseEntity.ok(result);
+    }
+
+    @PostMapping("/oauth/google")
+    public ResponseEntity<String> googleLogin(@RequestBody GoogleLoginRequestDto requestDto) {
+        return ResponseEntity.ok(userService.loginWithGoogle(requestDto));
     }
 
     @GetMapping("/check-id")
