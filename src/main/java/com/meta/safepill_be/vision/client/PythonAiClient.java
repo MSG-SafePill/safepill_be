@@ -5,6 +5,7 @@ import com.meta.safepill_be.chatbot.dto.AiChatResponseDto;
 import com.meta.safepill_be.medicine.dto.AiInteractionAnalyzeRequestDto;
 import com.meta.safepill_be.medicine.dto.AiInteractionAnalyzeResponseDto;
 import com.meta.safepill_be.vision.dto.AiIdentifyResponseDto;
+import com.meta.safepill_be.vision.dto.AiPillClassificationResponseDto;
 import com.meta.safepill_be.vision.dto.AiPrescriptionOcrResponseDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -30,8 +31,8 @@ public class PythonAiClient {
     @Value("${safepill.ai.timeout-ms:5000}")
     private long aiTimeoutMs;
 
-    public AiIdentifyResponseDto identifyPill(MultipartFile image) {
-        return postImage("/identify-upload", image, AiIdentifyResponseDto.class);
+    public AiPillClassificationResponseDto classifyPill(MultipartFile image) {
+        return postImage("/classify-pill", image, AiPillClassificationResponseDto.class);
     }
 
     public AiPrescriptionOcrResponseDto scanPrescription(MultipartFile image) {

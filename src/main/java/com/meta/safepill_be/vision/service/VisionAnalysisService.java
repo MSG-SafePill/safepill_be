@@ -31,15 +31,23 @@ public class VisionAnalysisService {
 
     @Transactional(readOnly = true)
     public VisionIdentifyResponseDto identifyPill(MultipartFile image) {
-        AiIdentifyResponseDto aiResponse = pythonAiClient.identifyPill(image);
+        AiPillClassificationResponseDto aiResponse = pythonAiClient.classifyPill(image);
         List<VisionMedicineCandidateDto> candidates = new ArrayList<>();
-        if (aiResponse != null && aiResponse.getIdentifiedPills() != null) {
-            for (AiIdentifiedPillDto item : aiResponse.getIdentifiedPills()) {
-                candidates.addAll(matchMedicines(item.getPillName(), item.getConfidence(), item.getMatchedText()));
+        if (aiResponse != null && aiResponse.getCandidates() != null) {
+            for (AiPillClassificationCandidateDto item : aiResponse.getCandidates()) {
+                List<VisionMedicineCandidateDto> matched = matchMedicines(
+                        item.getMedicineName(),
+                        item.getScore(),
+                        item.getClassLabel()
+                );
+                if (matched.isEmpty()) {
+                    candidates.add(toClassificationCandidate(item));
+                } else {
+                    candidates.addAll(matched);
+                }
             }
         }
         return VisionIdentifyResponseDto.builder()
-                .requestId(aiResponse != null ? aiResponse.getRequestId() : null)
                 .status(candidates.isEmpty() ? "no_match" : "ok")
                 .candidates(deduplicateByMedicineId(candidates))
                 .build();
@@ -133,6 +141,18 @@ public class VisionAnalysisService {
                 .build();
     }
 
+    private VisionMedicineCandidateDto toClassificationCandidate(AiPillClassificationCandidateDto item) {
+        return VisionMedicineCandidateDto.builder()
+                .itemSeq(item.getClassLabel())
+                .medicineName(item.getMedicineName())
+                .manufacturer(item.getManufacturer())
+                .confidence(item.getScore())
+                .matchedText(item.getReason())
+                .ingredients(List.of())
+                .interactionWarnings(List.of())
+                .build();
+    }
+
     private List<VisionIngredientDto> toIngredients(MedicineMaster medicine) {
         return medicine.getIngredients().stream()
                 .map(medicineIngredient -> {
@@ -168,11 +188,14 @@ public class VisionAnalysisService {
     }
 
     private List<VisionMedicineCandidateDto> deduplicateByMedicineId(List<VisionMedicineCandidateDto> candidates) {
-        Map<Long, VisionMedicineCandidateDto> bestById = new LinkedHashMap<>();
+        Map<String, VisionMedicineCandidateDto> bestById = new LinkedHashMap<>();
         for (VisionMedicineCandidateDto candidate : candidates) {
-            VisionMedicineCandidateDto previous = bestById.get(candidate.getMedicineId());
+            String key = candidate.getMedicineId() != null
+                    ? "id:" + candidate.getMedicineId()
+                    : "name:" + candidate.getMedicineName();
+            VisionMedicineCandidateDto previous = bestById.get(key);
             if (previous == null || candidate.getConfidence() > previous.getConfidence()) {
-                bestById.put(candidate.getMedicineId(), candidate);
+                bestById.put(key, candidate);
             }
         }
         return new ArrayList<>(bestById.values());
