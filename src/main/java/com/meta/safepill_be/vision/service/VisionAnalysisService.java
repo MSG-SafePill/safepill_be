@@ -31,25 +31,25 @@ public class VisionAnalysisService {
 
     @Transactional(readOnly = true)
     public VisionIdentifyResponseDto identifyPill(MultipartFile image) {
-        AiPillClassificationResponseDto aiResponse = pythonAiClient.classifyPill(image);
+        AiMultiPillClassificationResponseDto aiResponse = pythonAiClient.classifyPills(image);
         List<VisionMedicineCandidateDto> candidates = new ArrayList<>();
-        if (aiResponse != null && aiResponse.getCandidates() != null) {
-            for (AiPillClassificationCandidateDto item : aiResponse.getCandidates()) {
+        if (aiResponse != null && aiResponse.getDetectedPills() != null) {
+            for (AiDetectedPillClassificationDto detectedPill : aiResponse.getDetectedPills()) {
+                if (detectedPill.getCandidates() == null || detectedPill.getCandidates().isEmpty()) {
+                    continue;
+                }
+                AiPillClassificationCandidateDto item = detectedPill.getCandidates().get(0);
                 List<VisionMedicineCandidateDto> matched = matchMedicines(
                         item.getMedicineName(),
                         item.getScore(),
                         item.getClassLabel()
                 );
-                if (matched.isEmpty()) {
-                    candidates.add(toClassificationCandidate(item));
-                } else {
-                    candidates.addAll(matched);
-                }
+                candidates.add(matched.isEmpty() ? toClassificationCandidate(item) : matched.get(0));
             }
         }
         return VisionIdentifyResponseDto.builder()
                 .status(candidates.isEmpty() ? "no_match" : "ok")
-                .candidates(deduplicateByMedicineId(candidates))
+                .candidates(candidates)
                 .build();
     }
 
