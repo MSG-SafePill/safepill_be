@@ -19,6 +19,7 @@ import com.meta.safepill_be.user.repository.HealthProfileRepository;
 import com.meta.safepill_be.user.repository.UserRepository;
 import com.meta.safepill_be.vision.client.PythonAiClient;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +33,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ChatService {
     private final UserRepository userRepository;
     private final UserMedicationRegRepository userMedicationRegRepository;
@@ -125,6 +127,7 @@ public class ChatService {
                     response.getReferencedPills() != null ? response.getReferencedPills() : referencedPills,
                     false);
         } catch (RuntimeException e) {
+            log.warn("AI chat request failed. referencedPills={}", referencedPills, e);
             return fallbackAnswer(referencedPills);
         }
     }
