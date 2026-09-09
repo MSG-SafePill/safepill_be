@@ -14,4 +14,7 @@ public class MedicineAlternativeDto {
     private List<String> sharedIngredients;
     private boolean hasCabinetConflict;
     private List<String> conflictReasons;
+    @Builder.Default
+    private boolean isAiSuggested = false;
+    private String aiReason;
 }

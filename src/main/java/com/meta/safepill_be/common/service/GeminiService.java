@@ -2,6 +2,7 @@ package com.meta.safepill_be.common.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.meta.safepill_be.common.dto.GeminiResponseDto;
+import com.meta.safepill_be.medicine.dto.LlmAlternativeResponseDto;
 import com.meta.safepill_be.medicine.dto.LlmMedicineResponseDto;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
@@ -52,6 +53,39 @@ public class GeminiService {
             }
         } catch (Exception e) {
             System.err.println("❌ 제미나이 API 호출 실패 (" + medicineName + "): " + e.getMessage());
+        }
+        return null;
+    }
+
+    public LlmAlternativeResponseDto askAlternatives(String medicineName) {
+        String prompt = "너는 대한민국 식약처 데이터를 참고하는 약사야. " +
+                "'" + medicineName + "' 와(과) 대체 가능한(비슷한 효능 또는 동일 계열 성분을 가진) 일반의약품을 " +
+                "최대 3개까지 추천해줘. 실제로 한국에서 판매되는 제품명으로 답해. " +
+                "확실하지 않으면 무리해서 지어내지 말고 빈 배열을 반환해. " +
+                "반드시 JSON 형식으로만 반환하고, 키 이름은 alternatives(배열)로 하고 " +
+                "각 항목은 name(약 이름), activeIngredient(주성분명), reason(대체 가능한 이유, 1줄) " +
+                "세 개의 키를 가져야 해. 다른 군더더기 말은 절대 하지마.";
+        Map<String, Object> requestBody = Map.of("contents", List.of(Map.of("parts", List.of(Map.of("text", prompt)))),
+                "generationConfig", Map.of("responseMimeType", "application/json"));
+        try {
+            RestTemplate restTemplate = new RestTemplate();
+            String fullUrl = geminiApiUrl.trim() + "?key=" + geminiApiKey.trim();
+            java.net.URI uri = java.net.URI.create(fullUrl);
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Content-Type", "application/json");
+            HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(requestBody, headers);
+            ResponseEntity<GeminiResponseDto> response = restTemplate.exchange(
+                    uri,
+                    HttpMethod.POST,
+                    requestEntity,
+                    GeminiResponseDto.class
+            );
+            if (response.getBody() != null && response.getBody().getCandidates() != null && !response.getBody().getCandidates().isEmpty()) {
+                String jsonText = response.getBody().getCandidates().get(0).getContent().getParts().get(0).getText();
+                return objectMapper.readValue(jsonText, LlmAlternativeResponseDto.class);
+            }
+        } catch (Exception e) {
+            System.err.println("❌ 제미나이 대체약 추천 실패 (" + medicineName + "): " + e.getMessage());
         }
         return null;
     }

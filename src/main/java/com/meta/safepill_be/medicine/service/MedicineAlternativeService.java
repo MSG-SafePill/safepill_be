@@ -3,12 +3,16 @@ package com.meta.safepill_be.medicine.service;
 import com.meta.safepill_be.cabinet.domain.ItemType;
 import com.meta.safepill_be.cabinet.domain.UserMedicationReg;
 import com.meta.safepill_be.cabinet.repository.UserMedicationRegRepository;
+import com.meta.safepill_be.common.service.GeminiService;
+import com.meta.safepill_be.medicine.domain.IngredientMaster;
 import com.meta.safepill_be.medicine.domain.InteractionRule;
 import com.meta.safepill_be.medicine.domain.MedicineIngredient;
 import com.meta.safepill_be.medicine.domain.MedicineMaster;
 import com.meta.safepill_be.medicine.domain.SupplementIngredient;
 import com.meta.safepill_be.medicine.domain.SupplementMaster;
+import com.meta.safepill_be.medicine.dto.LlmAlternativeResponseDto;
 import com.meta.safepill_be.medicine.dto.MedicineAlternativeDto;
+import com.meta.safepill_be.medicine.repository.IngredientMasterRepository;
 import com.meta.safepill_be.medicine.repository.InteractionRuleRepository;
 import com.meta.safepill_be.medicine.repository.MedicineIngredientRepository;
 import com.meta.safepill_be.medicine.repository.MedicineMasterRepository;
@@ -44,19 +48,23 @@ public class MedicineAlternativeService {
     private final InteractionRuleRepository interactionRuleRepository;
     private final UserMedicationRegRepository userMedicationRegRepository;
     private final UserRepository userRepository;
+    private final IngredientMasterRepository ingredientMasterRepository;
+    private final GeminiService geminiService;
 
     @Transactional(readOnly = true)
     public List<MedicineAlternativeDto> findAlternatives(Long medicineId, String loginId) {
         MedicineMaster target = medicineMasterRepository.findById(medicineId)
                 .orElseThrow(() -> new IllegalArgumentException("의약품을 찾을 수 없습니다. id=" + medicineId));
 
+        Map<Long, String> cabinetIngredientOwners = collectCabinetIngredientOwners(loginId);
+
         List<Long> targetIngredientIds = target.getIngredients().stream()
                 .map(mi -> mi.getIngredientMaster().getId())
                 .distinct()
                 .toList();
         if (targetIngredientIds.isEmpty()) {
-            // 성분 데이터가 없는 약은 대체 후보를 계산할 수 없다 (동기화 데이터 부족)
-            return List.of();
+            // DB에 성분 데이터가 없는 약은 성분 매칭이 불가능하므로 AI 추천으로 대체
+            return findAiSuggestedAlternatives(target, cabinetIngredientOwners);
         }
 
         Map<Long, MedicineMaster> candidatesById = new LinkedHashMap<>();
@@ -74,10 +82,9 @@ public class MedicineAlternativeService {
             }
         }
         if (candidatesById.isEmpty()) {
-            return List.of();
+            // DB상 성분을 공유하는 다른 약이 없는 경우에도 AI 추천으로 대체
+            return findAiSuggestedAlternatives(target, cabinetIngredientOwners);
         }
-
-        Map<Long, String> cabinetIngredientOwners = collectCabinetIngredientOwners(loginId);
 
         Set<Long> allIngredientIds = new HashSet<>(cabinetIngredientOwners.keySet());
         candidatesById.values().forEach(candidate -> candidate.getIngredients()
@@ -103,6 +110,51 @@ public class MedicineAlternativeService {
         result.sort(Comparator
                 .comparing(MedicineAlternativeDto::isHasCabinetConflict)
                 .thenComparing((MedicineAlternativeDto dto) -> -dto.getSharedIngredients().size()));
+        return result;
+    }
+
+    /**
+     * DB 성분 매칭으로 대체 후보를 찾지 못했을 때 Gemini에게 대신 물어보는 fallback.
+     * DB 검증된 결과가 아니므로 isAiSuggested=true로 명확히 표시해서 프론트에서 구분 노출한다.
+     */
+    private List<MedicineAlternativeDto> findAiSuggestedAlternatives(
+            MedicineMaster target,
+            Map<Long, String> cabinetIngredientOwners
+    ) {
+        LlmAlternativeResponseDto response = geminiService.askAlternatives(target.getMedicineName());
+        if (response == null || response.getAlternatives() == null || response.getAlternatives().isEmpty()) {
+            return List.of();
+        }
+
+        List<MedicineAlternativeDto> result = new ArrayList<>();
+        for (LlmAlternativeResponseDto.Item item : response.getAlternatives()) {
+            if (item.getName() == null || item.getName().isBlank()) {
+                continue;
+            }
+            List<String> conflictReasons = List.of();
+            if (item.getActiveIngredient() != null && !cabinetIngredientOwners.isEmpty()) {
+                Optional<IngredientMaster> matched =
+                        ingredientMasterRepository.findByIngredientName(item.getActiveIngredient().trim());
+                if (matched.isPresent() && cabinetIngredientOwners.containsKey(matched.get().getId())) {
+                    conflictReasons = List.of(
+                            item.getActiveIngredient() + " 성분이 현재 복용 중인 '"
+                                    + cabinetIngredientOwners.get(matched.get().getId())
+                                    + "'와(과) 동일합니다. 중복 복용에 주의하세요."
+                    );
+                }
+            }
+            result.add(MedicineAlternativeDto.builder()
+                    .id(null)
+                    .medicineName(item.getName())
+                    .manufacturer(null)
+                    .sharedIngredients(item.getActiveIngredient() != null
+                            ? List.of(item.getActiveIngredient()) : List.of())
+                    .hasCabinetConflict(!conflictReasons.isEmpty())
+                    .conflictReasons(conflictReasons)
+                    .isAiSuggested(true)
+                    .aiReason(item.getReason())
+                    .build());
+        }
         return result;
     }
 
