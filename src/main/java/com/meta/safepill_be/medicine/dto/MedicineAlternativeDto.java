@@ -16,5 +16,7 @@ public class MedicineAlternativeDto {
     private List<String> conflictReasons;
     @Builder.Default
     private boolean isAiSuggested = false;
+    @Builder.Default
+    private boolean isVerifiedInDb = false;
     private String aiReason;
 }

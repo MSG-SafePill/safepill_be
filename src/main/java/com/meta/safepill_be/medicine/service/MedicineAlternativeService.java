@@ -143,15 +143,22 @@ public class MedicineAlternativeService {
                     );
                 }
             }
+            // AI가 지어낸 이름일 위험이 있으므로, 우리 DB에 실제로 존재하는 약인지 대조한다.
+            // 찾으면 DB의 정확한 이름/제조사로 덮어써서 신뢰도를 높이고 verified 배지를 붙일 수 있게 한다.
+            List<MedicineMaster> dbMatches = medicineMasterRepository
+                    .findTop5ByMedicineNameContainingIgnoreCase(item.getName().trim());
+            MedicineMaster dbMatch = dbMatches.isEmpty() ? null : dbMatches.get(0);
+
             result.add(MedicineAlternativeDto.builder()
-                    .id(null)
-                    .medicineName(item.getName())
-                    .manufacturer(null)
+                    .id(dbMatch != null ? dbMatch.getId() : null)
+                    .medicineName(dbMatch != null ? dbMatch.getMedicineName() : item.getName())
+                    .manufacturer(dbMatch != null ? dbMatch.getMedicineManufacturer() : null)
                     .sharedIngredients(item.getActiveIngredient() != null
                             ? List.of(item.getActiveIngredient()) : List.of())
                     .hasCabinetConflict(!conflictReasons.isEmpty())
                     .conflictReasons(conflictReasons)
                     .isAiSuggested(true)
+                    .isVerifiedInDb(dbMatch != null)
                     .aiReason(item.getReason())
                     .build());
         }
