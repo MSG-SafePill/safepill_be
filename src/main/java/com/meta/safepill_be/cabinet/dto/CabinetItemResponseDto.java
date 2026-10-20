@@ -2,6 +2,7 @@ package com.meta.safepill_be.cabinet.dto;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.meta.safepill_be.cabinet.domain.ItemType;
+import com.meta.safepill_be.medicine.guide.IngredientGuideAssessment;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -21,4 +22,5 @@ public class CabinetItemResponseDto {
     private String efficacy;
     private String precautions;
     private List<CabinetIngredientResponseDto> ingredients;
+    private IngredientGuideAssessment ingredientGuide;
 }

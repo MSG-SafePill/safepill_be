@@ -10,6 +10,7 @@ import com.meta.safepill_be.medicine.domain.MedicineIngredient;
 import com.meta.safepill_be.medicine.domain.MedicineMaster;
 import com.meta.safepill_be.medicine.domain.SupplementIngredient;
 import com.meta.safepill_be.medicine.domain.SupplementMaster;
+import com.meta.safepill_be.medicine.guide.IngredientGuideService;
 import com.meta.safepill_be.medicine.repository.MedicineMasterRepository;
 import com.meta.safepill_be.medicine.repository.SupplementMasterRepository;
 import com.meta.safepill_be.user.domain.User;
@@ -28,6 +29,7 @@ public class UserMedicationService {
     private final MedicineMasterRepository medicineRepository;
     private final SupplementMasterRepository supplementRepository;
     private final UserMedicationRegRepository userMedicationRegRepository;
+    private final IngredientGuideService ingredientGuideService;
 
     @Transactional
     public String addMedication(String loginId, MedicationRegRequestDto requestDto) {
@@ -81,6 +83,9 @@ public class UserMedicationService {
                         .imageUrl(medicine != null && medicine.getAppearanceInfo() != null ? medicine.getAppearanceInfo().getImageUrl() : null)
                         .efficacy(medicine != null ? medicine.getEfficacy() : null)
                         .precautions(medicine != null ? medicine.getPrecautions() : null)
+                        .ingredientGuide(ingredientGuideService.assess(medicine == null ? List.of()
+                                : medicine.getIngredients().stream()
+                                .map(i -> i.getIngredientMaster().getIngredientName()).toList()))
                         .ingredients(medicine != null ? medicine.getIngredients().stream()
                                 .map(this::toMedicineIngredientDto)
                                 .collect(Collectors.toList()) : List.of())
@@ -97,6 +102,9 @@ public class UserMedicationService {
                         .imageUrl(supplement != null && supplement.getAppearanceInfo() != null ? supplement.getAppearanceInfo().getImageUrl() : null)
                         .efficacy(supplement != null ? supplement.getEfficacy() : null)
                         .precautions(supplement != null ? supplement.getPrecautions() : null)
+                        .ingredientGuide(ingredientGuideService.assess(supplement == null ? List.of()
+                                : supplement.getIngredients().stream()
+                                .map(i -> i.getIngredientMaster().getIngredientName()).toList()))
                         .ingredients(supplement != null ? supplement.getIngredients().stream()
                                 .map(this::toSupplementIngredientDto)
                                 .collect(Collectors.toList()) : List.of())
@@ -108,6 +116,7 @@ public class UserMedicationService {
                     .itemId(reg.getItemId())
                     .supplyDays(reg.getSupplyDays())
                     .itemName("알 수 없는 항목")
+                    .ingredientGuide(ingredientGuideService.assess(List.of()))
                     .ingredients(List.of())
                     .build();
         }).collect(Collectors.toList());
