@@ -8,5 +8,6 @@ import java.util.Optional;
 
 public interface IngredientMasterRepository extends JpaRepository<IngredientMaster, Long> {
     Optional<IngredientMaster> findByIngredientName(String ingredientName);
+    Optional<IngredientMaster> findFirstByIngredientNameOrderByIdAsc(String ingredientName);
     List<IngredientMaster> findTop5ByIngredientNameContainingIgnoreCase(String ingredientName);
 }

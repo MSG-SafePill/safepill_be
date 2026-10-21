@@ -41,6 +41,15 @@ public class MedicineMaster {
     @Column(columnDefinition = "TEXT", nullable = false)
     private String precautions;
 
+    @Column(name = "cancel_name")
+    private String cancelName; // 허가 상태(정상/취하/유효기간만료 등). null이면 아직 확인 전
+
+    @Column(name = "cancel_date")
+    private String cancelDate;
+
+    @Column(name = "atc_code")
+    private String atcCode; // WHO ATC 약효 분류 코드
+
     @Builder.Default
     @OneToMany(mappedBy = "medicineMaster", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<MedicineIngredient> ingredients = new ArrayList<>();
@@ -49,5 +58,16 @@ public class MedicineMaster {
         this.efficacy = efficacy;
         this.useMethod = useMethod;
         this.precautions = precautions;
+    }
+
+    public void updatePermitInfo(String cancelName, String cancelDate, String atcCode) {
+        this.cancelName = cancelName;
+        this.cancelDate = cancelDate;
+        this.atcCode = atcCode;
+    }
+
+    /** 허가가 유효한 제품인지. 상태를 아직 모르는 경우(null)는 유효로 본다. */
+    public boolean isPermitActive() {
+        return cancelName == null || cancelName.isBlank() || "정상".equals(cancelName.trim());
     }
 }

@@ -28,4 +28,8 @@ public class MedicineIngredient {
 
     @Column(precision = 8, scale = 3)
     private BigDecimal dosage;
+
+    public void updateDosage(BigDecimal dosage) {
+        this.dosage = dosage;
+    }
 }

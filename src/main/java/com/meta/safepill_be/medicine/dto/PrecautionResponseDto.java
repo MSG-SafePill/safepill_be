@@ -50,6 +50,21 @@ public class PrecautionResponseDto {
         @JsonProperty("NB_DOC_DATA")
         private String precautions;
 
+        @JsonProperty("MATERIAL_NAME")
+        private String materials;
+
+        @JsonProperty("MAIN_ITEM_INGR")
+        private String mainIngredients;
+
+        @JsonProperty("CANCEL_NAME")
+        private String cancelName;
+
+        @JsonProperty("CANCEL_DATE")
+        private String cancelDate;
+
+        @JsonProperty("ATC_CODE")
+        private String atcCode;
+
         @JsonAnySetter
         private Map<String, Object> unknownProperties = new HashMap<>();
     }

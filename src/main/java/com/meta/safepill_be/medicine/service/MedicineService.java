@@ -17,9 +17,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.util.DefaultUriBuilderFactory;
 
 import java.math.BigDecimal;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -36,9 +34,6 @@ public class MedicineService {
 
     @Value("${open-api.data-go-kr.endpoint.medicine-identify}")
     private String medicineIdentifyEndpoint;
-
-    @Value("${open-api.data-go-kr.endpoint.medicine-ingredient}")
-    private String medicineIngredientEndpoint;
 
     @Value("${open-api.data-go-kr.endpoint.medicine-precaution}")
     private String medicinePrecautionEndpoint;
@@ -114,75 +109,53 @@ public class MedicineService {
         }
     }
 
+    /**
+     * 성분 상세 API(getDrugPrdtMcpnDtlInq07)는 item_seq 필터를 무시해서 쓸 수 없다.
+     * 필터가 정상 동작하는 허가정보 상세 API의 주성분(MATERIAL_NAME)으로 성분·함량·허가 상태를 채운다.
+     */
     @Transactional
     public void fetchAndSaveIngredients() {
         List<MedicineMaster> medicines = medicineMasterRepository.findAll();
         WebClient webClient = createWebClient();
-        System.out.println("🚀 성분 데이터 파싱 및 연결을 시작합니다...");
+        System.out.println("🚀 허가정보 기반 성분 동기화를 시작합니다... (" + medicines.size() + "개)");
+        int fromPermit = 0;
+        int fromProductName = 0;
+        int noData = 0;
         for (MedicineMaster medicine : medicines) {
-            Set<Long> linkedIngredientIds = new HashSet<>();
-            for (MedicineIngredient ingredient : medicine.getIngredients()) {
-                linkedIngredientIds.add(ingredient.getIngredientMaster().getId());
-            }
             try {
-                IngredientResponseDto response = webClient.get()
-                        .uri(uriBuilder -> uriBuilder
-                                .path(medicineIngredientEndpoint)
-                                .queryParam("serviceKey", serviceKey)
-                                .queryParam("pageNo", "1")
-                                .queryParam("numOfRows", "100")
-                                .queryParam("type", "json")
-                                .queryParam("item_seq", medicine.getItemSeq())
-                                .build())
-                        .retrieve()
-                        .bodyToMono(IngredientResponseDto.class)
-                        .block();
-                if (response != null && response.getBody() != null && response.getBody().getItems() != null) {
-                    List<IngredientResponseDto.Item> ingredientItems = response.getBody().getItems();
-                    for (IngredientResponseDto.Item ingItem : ingredientItems) {
-                        String ingName = getOrDefault(ingItem.getIngredientName());
-                        if (ingName.equals("정보 없음")) continue;
-                        String unitStr = normalizeUnit(ingItem.getUnit());
-                        String dosageStr = ingItem.getDosage();
-                        IngredientMaster ingredientMaster = ingredientMasterRepository.findByIngredientName(ingName)
-                                .orElseGet(() -> ingredientMasterRepository.save(
-                                        IngredientMaster.builder()
-                                                .ingredientName(ingName)
-                                                .unit(unitStr.equals("정보 없음") ? null : unitStr)
-                                                .bestTimeGuide("정보 없음")
-                                                .intakeTip("정보 없음")
-                                                .build()
-                                ));
-                        if (linkedIngredientIds.contains(ingredientMaster.getId())
-                                || medicineIngredientRepository.existsByMedicineMaster_IdAndIngredientMaster_Id(
-                                medicine.getId(), ingredientMaster.getId())) {
-                            continue;
-                        }
-                        BigDecimal parsedDosage = null;
-                        if (dosageStr != null && !dosageStr.trim().isEmpty()) {
-                            try {
-                                parsedDosage = new BigDecimal(dosageStr.trim());
-                            } catch (NumberFormatException e) {
-                                System.out.println("⚠️ 용량 숫자 변환 실패 - 성분명: " + ingName + ", 값: " + dosageStr);
-                            }
-                        }
-                        MedicineIngredient medicineIngredient = MedicineIngredient.builder()
-                                .medicineMaster(medicine)
-                                .ingredientMaster(ingredientMaster)
-                                .dosage(parsedDosage)
-                                .build();
-                        medicine.getIngredients().add(medicineIngredient);
-                        linkedIngredientIds.add(ingredientMaster.getId());
-                    }
-                    medicineMasterRepository.save(medicine);
-                    System.out.println("✅ [" + medicine.getMedicineName() + "] 성분 연결 완료!");
+                PrecautionResponseDto.Item permit = fetchPermitDetail(webClient, medicine.getItemSeq());
+                List<PermitIngredientParser.Parsed> parsed = List.of();
+                if (permit != null) {
+                    medicine.updatePermitInfo(
+                            blankToNull(permit.getCancelName()),
+                            blankToNull(permit.getCancelDate()),
+                            blankToNull(permit.getAtcCode()));
+                    parsed = PermitIngredientParser.parse(permit.getMaterials(), permit.getMainIngredients());
                 }
-                Thread.sleep(500);
+                boolean usedProductName = false;
+                if (parsed.isEmpty()) {
+                    parsed = knownIngredientFromProductName(medicine);
+                    usedProductName = !parsed.isEmpty();
+                }
+                if (parsed.isEmpty()) {
+                    noData++;
+                    System.out.println("⚠️ 성분 정보를 찾지 못했습니다: " + medicine.getMedicineName());
+                } else {
+                    linkIngredients(medicine, parsed);
+                    if (usedProductName) {
+                        fromProductName++;
+                    } else {
+                        fromPermit++;
+                    }
+                }
+                medicineMasterRepository.save(medicine);
+                Thread.sleep(150);
             } catch (Exception e) {
                 System.out.println("❌ 에러 발생 (" + medicine.getMedicineName() + "): " + e.getMessage());
             }
         }
-        System.out.println("🎉 모든 성분 동기화 완료!");
+        System.out.println("🎉 성분 동기화 완료! 허가정보: " + fromPermit
+                + "건, 제품명 보완: " + fromProductName + "건, 정보 없음: " + noData + "건");
     }
 
     @Transactional
@@ -192,29 +165,14 @@ public class MedicineService {
         System.out.println("🚀 주의사항(Precautions) 데이터 업데이트를 시작합니다...");
         for (MedicineMaster medicine : medicines) {
             try {
-                PrecautionResponseDto response = webClient.get()
-                        .uri(uriBuilder -> uriBuilder
-                                .path(medicinePrecautionEndpoint)
-                                .queryParam("serviceKey", serviceKey)
-                                .queryParam("pageNo", "1")
-                                .queryParam("numOfRows", "3")
-                                .queryParam("type", "json")
-                                .queryParam("item_seq", medicine.getItemSeq())
-                                .build())
-                        .retrieve()
-                        .bodyToMono(PrecautionResponseDto.class)
-                        .block();
-                if (response != null && response.getBody() != null && response.getBody().getItems() != null) {
-                    List<PrecautionResponseDto.Item> items = response.getBody().getItems();
-                    if (!items.isEmpty()) {
-                        PrecautionResponseDto.Item precautionItem = items.get(0);
-                        String cleanedEfficacy = cleanXmlText(precautionItem.getEfficacy());
-                        String cleanedUseMethod = cleanXmlText(precautionItem.getUseMethod());
-                        String cleanedPrecautions = cleanXmlText(precautionItem.getPrecautions());
-                        medicine.updateDetails(cleanedEfficacy, cleanedUseMethod, cleanedPrecautions);
-                        medicineMasterRepository.save(medicine);
-                        System.out.println("✅ [" + medicine.getMedicineName() + "] 상세정보 업데이트 완료!");
-                    }
+                PrecautionResponseDto.Item precautionItem = fetchPermitDetail(webClient, medicine.getItemSeq());
+                if (precautionItem != null) {
+                    medicine.updateDetails(
+                            cleanXmlText(precautionItem.getEfficacy()),
+                            cleanXmlText(precautionItem.getUseMethod()),
+                            cleanXmlText(precautionItem.getPrecautions()));
+                    medicineMasterRepository.save(medicine);
+                    System.out.println("✅ [" + medicine.getMedicineName() + "] 상세정보 업데이트 완료!");
                 }
                 Thread.sleep(500);
             } catch (Exception e) {
@@ -222,6 +180,99 @@ public class MedicineService {
             }
         }
         System.out.println("🎉 모든 주의사항 데이터 동기화 완료!");
+    }
+
+    private PrecautionResponseDto.Item fetchPermitDetail(WebClient webClient, String itemSeq) {
+        PrecautionResponseDto response = webClient.get()
+                .uri(uriBuilder -> uriBuilder
+                        .path(medicinePrecautionEndpoint)
+                        .queryParam("serviceKey", serviceKey)
+                        .queryParam("pageNo", "1")
+                        .queryParam("numOfRows", "1")
+                        .queryParam("type", "json")
+                        .queryParam("item_seq", itemSeq)
+                        .build())
+                .retrieve()
+                .bodyToMono(PrecautionResponseDto.class)
+                .block();
+        if (response == null || response.getBody() == null || response.getBody().getItems() == null
+                || response.getBody().getItems().isEmpty()) {
+            return null;
+        }
+        PrecautionResponseDto.Item item = response.getBody().getItems().get(0);
+        return itemSeq.equals(item.getItemSeq()) ? item : null;
+    }
+
+    /** 허가정보가 없는 약은 제품명 괄호 속 성분이 이미 알려진 성분일 때만 보완한다. */
+    private List<PermitIngredientParser.Parsed> knownIngredientFromProductName(MedicineMaster medicine) {
+        String name = PermitIngredientParser.ingredientFromProductName(medicine.getMedicineName());
+        if (name == null || ingredientMasterRepository.findFirstByIngredientNameOrderByIdAsc(name).isEmpty()) {
+            return List.of();
+        }
+        return List.of(new PermitIngredientParser.Parsed(name, null, null));
+    }
+
+    private void linkIngredients(MedicineMaster medicine, List<PermitIngredientParser.Parsed> parsed) {
+        for (PermitIngredientParser.Parsed item : parsed) {
+            String unit = normalizeUnit(item.unit());
+            IngredientMaster ingredient = ingredientMasterRepository
+                    .findFirstByIngredientNameOrderByIdAsc(item.name())
+                    .orElseGet(() -> ingredientMasterRepository.save(
+                            IngredientMaster.builder()
+                                    .ingredientName(item.name())
+                                    .unit(unit.equals("정보 없음") ? null : unit)
+                                    .bestTimeGuide("정보 없음")
+                                    .intakeTip("정보 없음")
+                                    .build()));
+            if (ingredient.getUnit() == null && !unit.equals("정보 없음")) {
+                ingredient.updateLimitAndUnit(ingredient.getUpperLimit(), unit);
+            }
+            BigDecimal dosage = convertDosage(item.dosage(), unit, ingredient.getUnit());
+            MedicineIngredient existing = medicine.getIngredients().stream()
+                    .filter(link -> link.getIngredientMaster().getId().equals(ingredient.getId()))
+                    .findFirst()
+                    .orElse(null);
+            if (existing != null) {
+                if (existing.getDosage() == null && dosage != null) {
+                    existing.updateDosage(dosage);
+                }
+                continue;
+            }
+            medicine.getIngredients().add(MedicineIngredient.builder()
+                    .medicineMaster(medicine)
+                    .ingredientMaster(ingredient)
+                    .dosage(dosage)
+                    .build());
+        }
+    }
+
+    /** 성분 마스터의 단위(mg/g/mcg)에 맞춰 환산한다. 환산할 수 없으면 틀린 값을 넣지 않고 null로 둔다. */
+    private BigDecimal convertDosage(BigDecimal dosage, String fromUnit, String toUnit) {
+        if (dosage == null || toUnit == null) {
+            return null;
+        }
+        if (fromUnit.equals(toUnit)) {
+            return dosage;
+        }
+        BigDecimal from = massInMg(fromUnit);
+        BigDecimal to = massInMg(toUnit);
+        if (from == null || to == null) {
+            return null;
+        }
+        return dosage.multiply(from).divide(to, 3, java.math.RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal massInMg(String unit) {
+        return switch (unit) {
+            case "g" -> BigDecimal.valueOf(1000);
+            case "mg" -> BigDecimal.ONE;
+            case "mcg" -> new BigDecimal("0.001");
+            default -> null;
+        };
+    }
+
+    private String blankToNull(String text) {
+        return text == null || text.isBlank() || text.equalsIgnoreCase("null") ? null : text.trim();
     }
 
     private WebClient createWebClient() {
