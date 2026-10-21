@@ -18,4 +18,6 @@ public interface MedicineMasterRepository extends JpaRepository<MedicineMaster, 
     @EntityGraph(attributePaths = {"ingredients", "ingredients.ingredientMaster"})
     List<MedicineMaster> findByIdIn(List<Long> ids);
     List<MedicineMaster> findByEfficacyIsNull();
+    @EntityGraph(attributePaths = {"ingredients", "ingredients.ingredientMaster"})
+    List<MedicineMaster> findTop30ByAtcCodeStartingWith(String atcPrefix);
 }

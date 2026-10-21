@@ -9,6 +9,7 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -35,20 +36,8 @@ public class GeminiService {
         Map<String, Object> requestBody = Map.of("contents", List.of(Map.of("parts", List.of(Map.of("text", prompt)))),
                 "generationConfig", Map.of("responseMimeType", "application/json"));
         try {
-            RestTemplate restTemplate = new RestTemplate();
-            String fullUrl = geminiApiUrl.trim() + "?key=" + geminiApiKey.trim();
-            java.net.URI uri = java.net.URI.create(fullUrl);
-            HttpHeaders headers = new HttpHeaders();
-            headers.set("Content-Type", "application/json");
-            HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(requestBody, headers);
-            ResponseEntity<GeminiResponseDto> response = restTemplate.exchange(
-                    uri,
-                    HttpMethod.POST,
-                    requestEntity,
-                    GeminiResponseDto.class
-            );
-            if (response.getBody() != null && response.getBody().getCandidates() != null && !response.getBody().getCandidates().isEmpty()) {
-                String jsonText = response.getBody().getCandidates().get(0).getContent().getParts().get(0).getText();
+            String jsonText = callGemini(requestBody);
+            if (jsonText != null) {
                 return objectMapper.readValue(jsonText, LlmMedicineResponseDto.class);
             }
         } catch (Exception e) {
@@ -68,24 +57,34 @@ public class GeminiService {
         Map<String, Object> requestBody = Map.of("contents", List.of(Map.of("parts", List.of(Map.of("text", prompt)))),
                 "generationConfig", Map.of("responseMimeType", "application/json"));
         try {
-            RestTemplate restTemplate = new RestTemplate();
-            String fullUrl = geminiApiUrl.trim() + "?key=" + geminiApiKey.trim();
-            java.net.URI uri = java.net.URI.create(fullUrl);
-            HttpHeaders headers = new HttpHeaders();
-            headers.set("Content-Type", "application/json");
-            HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(requestBody, headers);
-            ResponseEntity<GeminiResponseDto> response = restTemplate.exchange(
-                    uri,
-                    HttpMethod.POST,
-                    requestEntity,
-                    GeminiResponseDto.class
-            );
-            if (response.getBody() != null && response.getBody().getCandidates() != null && !response.getBody().getCandidates().isEmpty()) {
-                String jsonText = response.getBody().getCandidates().get(0).getContent().getParts().get(0).getText();
+            String jsonText = callGemini(requestBody);
+            if (jsonText != null) {
                 return objectMapper.readValue(jsonText, LlmAlternativeResponseDto.class);
             }
         } catch (Exception e) {
             System.err.println("❌ 제미나이 대체약 추천 실패 (" + medicineName + "): " + e.getMessage());
+        }
+        return null;
+    }
+
+    /** 응답이 없을 때 화면이 멈추지 않도록 연결/읽기 타임아웃을 둔다. */
+    private String callGemini(Map<String, Object> requestBody) {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(5_000);
+        factory.setReadTimeout(25_000);
+        RestTemplate restTemplate = new RestTemplate(factory);
+        java.net.URI uri = java.net.URI.create(geminiApiUrl.trim() + "?key=" + geminiApiKey.trim());
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Content-Type", "application/json");
+        ResponseEntity<GeminiResponseDto> response = restTemplate.exchange(
+                uri,
+                HttpMethod.POST,
+                new HttpEntity<>(requestBody, headers),
+                GeminiResponseDto.class
+        );
+        if (response.getBody() != null && response.getBody().getCandidates() != null
+                && !response.getBody().getCandidates().isEmpty()) {
+            return response.getBody().getCandidates().get(0).getContent().getParts().get(0).getText();
         }
         return null;
     }

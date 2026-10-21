@@ -1,7 +1,7 @@
 package com.meta.safepill_be.medicine.controller;
 
 import com.meta.safepill_be.medicine.domain.MedicineMaster;
-import com.meta.safepill_be.medicine.dto.MedicineAlternativeDto;
+import com.meta.safepill_be.medicine.dto.MedicineAlternativeResponseDto;
 import com.meta.safepill_be.medicine.service.MedicineAlternativeService;
 import com.meta.safepill_be.medicine.service.MedicineService;
 import com.meta.safepill_be.user.util.JwtUtil;
@@ -55,7 +55,7 @@ public class MedicineController {
     }
 
     @GetMapping("/{id}/alternatives")
-    public ResponseEntity<List<MedicineAlternativeDto>> getAlternatives(
+    public ResponseEntity<MedicineAlternativeResponseDto> getAlternatives(
             @PathVariable Long id,
             @RequestHeader(value = "Authorization", required = false) String token) {
         String loginId = extractLoginId(token);
