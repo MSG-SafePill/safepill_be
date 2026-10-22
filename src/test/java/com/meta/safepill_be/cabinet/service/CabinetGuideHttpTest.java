@@ -52,7 +52,7 @@ class CabinetGuideHttpTest {
         var supplement = supplements.save(SupplementMaster.builder()
                 .itemSeq("GUIDE-TEST-SUP").supplementName("합성 가이드 테스트 영양제")
                 .supplementManufacturer("테스트").build());
-        for (String name : List.of("칼슘", "비타민 C", "마그네슘")) {
+        for (String name : List.of("칼슘", "비타민 C", "마그네슘", "APAP")) {
             supplementIngredients.save(SupplementIngredient.builder().supplementMaster(supplement)
                     .ingredientMaster(ingredient(name)).build());
         }
@@ -73,8 +73,15 @@ class CabinetGuideHttpTest {
         Set<String> codes = new HashSet<>();
         boolean partial = false;
         boolean missingData = false;
+        int overlappingItems = 0;
         List<Long> registrationIds = new ArrayList<>();
         for (var item : items) {
+            var overlaps = item.get("ingredientOverlaps");
+            if (!overlaps.isEmpty()) {
+                overlappingItems++;
+                assertEquals("ACETAMINOPHEN", overlaps.get(0).get("code").asText());
+                assertEquals(1, overlaps.get(0).get("relatedItems").size());
+            }
             var assessment = item.get("ingredientGuide");
             partial |= assessment.get("status").asText().equals("PARTIAL");
             missingData |= assessment.get("status").asText().equals("NO_INGREDIENT_DATA");
@@ -87,6 +94,7 @@ class CabinetGuideHttpTest {
         assertEquals(Set.of("CALCIUM", "VITAMIN_C", "MAGNESIUM", "ACETAMINOPHEN", "MORPHINE"), codes);
         assertTrue(partial);
         assertTrue(missingData);
+        assertEquals(2, overlappingItems);
         for (Long regId : registrationIds) {
             assertEquals(200, request("DELETE", "/api/mypills/" + regId, null, token).statusCode());
         }

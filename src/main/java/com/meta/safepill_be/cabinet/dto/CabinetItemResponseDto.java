@@ -9,7 +9,7 @@ import lombok.Getter;
 import java.util.List;
 
 @Getter
-@Builder
+@Builder(toBuilder = true)
 @JsonPropertyOrder({"regId", "type", "itemId", "itemName"})
 public class CabinetItemResponseDto {
     private Long regId;
@@ -23,4 +23,6 @@ public class CabinetItemResponseDto {
     private String precautions;
     private List<CabinetIngredientResponseDto> ingredients;
     private IngredientGuideAssessment ingredientGuide;
+    @Builder.Default
+    private List<CabinetIngredientOverlap> ingredientOverlaps = List.of();
 }

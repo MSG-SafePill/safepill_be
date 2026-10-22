@@ -70,7 +70,7 @@ public class UserMedicationService {
         User user = userRepository.findByLoginId(loginId)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
         List<UserMedicationReg> myRegList = userMedicationRegRepository.findByUserId(user.getId());
-        return myRegList.stream().map(reg -> {
+        List<CabinetItemResponseDto> items = myRegList.stream().map(reg -> {
             if (reg.getItem_type() == ItemType.MEDICINE) {
                 MedicineMaster medicine = medicineRepository.findById(reg.getItemId()).orElse(null);
                 return CabinetItemResponseDto.builder()
@@ -120,6 +120,7 @@ public class UserMedicationService {
                     .ingredients(List.of())
                     .build();
         }).collect(Collectors.toList());
+        return CabinetIngredientOverlaps.enrich(items);
     }
 
     private Integer normalizeSupplyDays(Integer supplyDays) {
