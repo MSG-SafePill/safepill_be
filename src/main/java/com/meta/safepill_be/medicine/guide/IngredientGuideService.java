@@ -13,6 +13,7 @@ import java.util.*;
 @Service
 public class IngredientGuideService {
     private final Map<String, IngredientGuide> aliases = new HashMap<>();
+    private final List<IngredientGuideCatalogEntry> catalog = new ArrayList<>();
 
     public IngredientGuideService() {
         register(new IngredientGuide("CALCIUM", "칼슘", "EXCESS_INTAKE",
@@ -82,6 +83,7 @@ public class IngredientGuideService {
     }
 
     private void register(IngredientGuide guide, String... names) {
+        catalog.add(new IngredientGuideCatalogEntry(guide, List.of(names)));
         for (String name : names) {
             String key = normalize(name);
             if (aliases.putIfAbsent(key, guide) != null) {
@@ -93,5 +95,9 @@ public class IngredientGuideService {
     private static String normalize(String value) {
         return value == null ? "" : Normalizer.normalize(value, Normalizer.Form.NFKC)
                 .toLowerCase(Locale.ROOT).replaceAll("[\\s\\p{Z}]+", "");
+    }
+
+    public List<IngredientGuideCatalogEntry> getCatalog() {
+        return List.copyOf(catalog);
     }
 }

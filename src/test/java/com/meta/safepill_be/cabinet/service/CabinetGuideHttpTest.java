@@ -31,6 +31,24 @@ class CabinetGuideHttpTest {
     private final HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
 
     @Test
+    void catalogIsAvailableWithoutMedicationRegistrationOrLogin() throws Exception {
+        var response = request("GET", "/api/ingredient-guides", null, null);
+        assertEquals(200, response.statusCode());
+        var entries = json.readTree(response.body());
+        assertEquals(5, entries.size());
+        Set<String> codes = new HashSet<>();
+        boolean hasAlias = false;
+        for (var entry : entries) {
+            codes.add(entry.get("guide").get("code").asText());
+            assertFalse(entry.get("guide").get("sourceUrl").asText().isBlank());
+            assertFalse(entry.get("guide").get("detail").asText().isBlank());
+            for (var alias : entry.get("aliases")) hasAlias |= alias.asText().equals("APAP");
+        }
+        assertEquals(5, codes.size());
+        assertTrue(hasAlias);
+    }
+
+    @Test
     void signupLoginRegisterInspectAndDeleteThroughRealHttp() throws Exception {
         String loginId = "guide_" + UUID.randomUUID();
         var signup = Map.of("loginId", loginId, "password", "LocalTestOnly123!",
