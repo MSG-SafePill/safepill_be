@@ -14,6 +14,7 @@
 4. `docs/seed-medicine-ingredients-nedrug.sql` — 허가정보 API에 없던 183개 약의 성분·함량·허가 상태.
 5. `docs/seed-medicine-permit-nedrug.sql` — 제품명으로만 성분을 채웠던 33개 약의 함량·허가 상태.
 6. `docs/fix-ingredient-units.sql` — 단위 보정.
+7. `docs/seed-dur-product-pairs.sql` — DUR 품목정보 API로 우리 약 502개를 전수 조회해 찾은 공식 병용금기(수마트란 × 프릴리지, 세로토닌성 증후군)를 염 형태 성분에 연결한다. 공공 규칙은 기본 성분명이라 이 연결이 없으면 앱에서 뜨지 않는다.
 
 ```bash
 docker exec -i safepill-postgres psql -U postgres -d safepill -v ON_ERROR_STOP=1 < docs/merge-duplicate-ingredients.sql
