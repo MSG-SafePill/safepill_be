@@ -2,6 +2,8 @@ package com.meta.safepill_be.cabinet.controller;
 
 import com.meta.safepill_be.cabinet.dto.CabinetItemResponseDto;
 import com.meta.safepill_be.cabinet.dto.MedicationRegRequestDto;
+import com.meta.safepill_be.cabinet.dto.MedicationPreviewDto;
+import com.meta.safepill_be.cabinet.domain.ItemType;
 import com.meta.safepill_be.cabinet.service.UserMedicationService;
 import com.meta.safepill_be.user.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
@@ -48,5 +50,23 @@ public class UserMedicationController {
         String loginId = jwtUtil.getLoginIdFromToken(actualToken);
         String result = userMedicationService.deleteMedication(loginId, regId);
         return ResponseEntity.ok(result);
+    }
+
+    @GetMapping("/preview")
+    public ResponseEntity<?> previewMedication(@RequestHeader("Authorization") String token,
+            @RequestParam String type, @RequestParam Long itemId) {
+        String loginId = jwtUtil.getLoginIdFromToken(token.replace("Bearer ", ""));
+        final ItemType itemType;
+        try {
+            itemType = ItemType.valueOf(type);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(java.util.Map.of("message", "올바른 제품 분류를 선택해주세요."));
+        }
+        try {
+            return ResponseEntity.ok(userMedicationService.previewMedication(loginId, itemType, itemId));
+        } catch (org.springframework.web.server.ResponseStatusException e) {
+            // Return directly so /error security dispatch cannot mask a 400/404 as 403.
+            return ResponseEntity.status(e.getStatusCode()).body(java.util.Map.of("message", e.getReason()));
+        }
     }
 }

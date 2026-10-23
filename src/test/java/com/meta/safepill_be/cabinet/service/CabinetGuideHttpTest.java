@@ -79,6 +79,29 @@ class CabinetGuideHttpTest {
                 .medicineManufacturer("테스트").precautions("테스트 전용").build());
         assertEquals(200, request("POST", "/api/mypills",
                 Map.of("type", "MEDICINE", "itemId", medicine.getId()), token).statusCode());
+        var preview = request("GET", "/api/mypills/preview?type=SUPPLEMENT&itemId=" + supplement.getId(), null, token);
+        assertEquals(200, preview.statusCode());
+        var previewBody = json.readTree(preview.body());
+        assertFalse(previewBody.get("alreadyRegistered").asBoolean());
+        assertEquals("ACETAMINOPHEN", previewBody.get("ingredientOverlaps").get(0).get("code").asText());
+        assertEquals(1, previewBody.get("unverifiedCabinetItems").asInt());
+        assertEquals(1, json.readTree(request("GET", "/api/mypills", null, token).body()).size());
+        var registeredPreview = json.readTree(request("GET", "/api/mypills/preview?type=MEDICINE&itemId=" + medicine.getId(), null, token).body());
+        assertTrue(registeredPreview.get("alreadyRegistered").asBoolean());
+        assertTrue(registeredPreview.get("ingredientOverlaps").isEmpty());
+        assertEquals(404, request("GET", "/api/mypills/preview?type=MEDICINE&itemId=999999999", null, token).statusCode());
+        assertEquals(400, request("GET", "/api/mypills/preview?type=INVALID&itemId=1", null, token).statusCode());
+        assertEquals(400, request("GET", "/api/mypills/preview?type=MEDICINE&itemId=-1", null, token).statusCode());
+        var unknownPreview = json.readTree(request("GET", "/api/mypills/preview?type=MEDICINE&itemId=" + missing.getId(), null, token).body());
+        assertEquals("NO_INGREDIENT_DATA", unknownPreview.get("ingredientGuide").get("status").asText());
+        assertNotEquals(200, request("GET", "/api/mypills/preview?type=MEDICINE&itemId=" + medicine.getId(), null, null).statusCode());
+        var otherSignup = new HashMap<String, String>(signup);
+        otherSignup.put("loginId", loginId + "_other");
+        assertEquals(200, request("POST", "/api/users/signup", otherSignup, null).statusCode());
+        String otherToken = request("POST", "/api/users/login", Map.of("loginId", loginId + "_other", "password", "LocalTestOnly123!"), null).body();
+        var otherPreview = json.readTree(request("GET", "/api/mypills/preview?type=SUPPLEMENT&itemId=" + supplement.getId(), null, otherToken).body());
+        assertTrue(otherPreview.get("ingredientOverlaps").isEmpty());
+        assertEquals(0, otherPreview.get("unverifiedCabinetItems").asInt());
         assertEquals(200, request("POST", "/api/mypills",
                 Map.of("type", "SUPPLEMENT", "itemId", supplement.getId()), token).statusCode());
         assertEquals(200, request("POST", "/api/mypills",

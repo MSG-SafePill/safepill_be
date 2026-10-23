@@ -5,6 +5,9 @@ import com.meta.safepill_be.cabinet.domain.UserMedicationReg;
 import com.meta.safepill_be.cabinet.dto.CabinetIngredientResponseDto;
 import com.meta.safepill_be.cabinet.dto.CabinetItemResponseDto;
 import com.meta.safepill_be.cabinet.dto.MedicationRegRequestDto;
+import com.meta.safepill_be.cabinet.dto.MedicationPreviewDto;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import com.meta.safepill_be.cabinet.repository.UserMedicationRegRepository;
 import com.meta.safepill_be.medicine.domain.MedicineIngredient;
 import com.meta.safepill_be.medicine.domain.MedicineMaster;
@@ -131,6 +134,38 @@ public class UserMedicationService {
             throw new IllegalArgumentException("처방/구매 일수는 1일 이상이어야 합니다.");
         }
         return supplyDays;
+    }
+
+    @Transactional(readOnly = true)
+    public MedicationPreviewDto previewMedication(String loginId, ItemType type, Long itemId) {
+        if (itemId == null || itemId <= 0 || type == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "올바른 제품을 선택해주세요.");
+        }
+        // Only this authenticated user's cabinet is used. No registration is persisted.
+        var cabinet = getMyMedications(loginId);
+        String name;
+        List<String> names;
+        if (type == ItemType.MEDICINE) {
+            var medicine = medicineRepository.findById(itemId).orElseThrow(() ->
+                    new ResponseStatusException(HttpStatus.NOT_FOUND, "약품을 찾을 수 없습니다."));
+            name = medicine.getMedicineName();
+            names = medicine.getIngredients().stream().map(i -> i.getIngredientMaster().getIngredientName()).toList();
+        } else {
+            var supplement = supplementRepository.findById(itemId).orElseThrow(() ->
+                    new ResponseStatusException(HttpStatus.NOT_FOUND, "영양제를 찾을 수 없습니다."));
+            name = supplement.getSupplementName();
+            names = supplement.getIngredients().stream().map(i -> i.getIngredientMaster().getIngredientName()).toList();
+        }
+        var candidate = CabinetItemResponseDto.builder().regId(-1L).type(type).itemId(itemId)
+                .itemName(name).ingredientGuide(ingredientGuideService.assess(names)).build();
+        var combined = new java.util.ArrayList<>(cabinet);
+        combined.add(candidate);
+        var result = CabinetIngredientOverlaps.enrich(combined).get(combined.size() - 1);
+        boolean registered = cabinet.stream().anyMatch(i -> i.getType() == type && itemId.equals(i.getItemId()));
+        long unverified = cabinet.stream().filter(i -> i.getIngredientGuide() == null
+                || !"AVAILABLE".equals(i.getIngredientGuide().status())).count();
+        return new MedicationPreviewDto(type, itemId, name, registered, result.getIngredientGuide(),
+                result.getIngredientOverlaps(), unverified);
     }
 
     @Transactional
