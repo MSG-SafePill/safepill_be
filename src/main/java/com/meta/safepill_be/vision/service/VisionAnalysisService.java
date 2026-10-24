@@ -11,6 +11,8 @@ import com.meta.safepill_be.medicine.repository.MedicineMasterRepository;
 import com.meta.safepill_be.vision.client.PythonAiClient;
 import com.meta.safepill_be.vision.dto.*;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -22,6 +24,7 @@ import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class VisionAnalysisService {
     private final PythonAiClient pythonAiClient;
     private final MedicineMasterRepository medicineMasterRepository;
@@ -32,6 +35,7 @@ public class VisionAnalysisService {
     @Transactional(readOnly = true)
     public VisionIdentifyResponseDto identifyPill(MultipartFile image) {
         AiMultiPillClassificationResponseDto aiResponse = pythonAiClient.classifyPills(image);
+        long enrichStarted = System.nanoTime();
         List<VisionMedicineCandidateDto> candidates = new ArrayList<>();
         if (aiResponse != null && aiResponse.getDetectedPills() != null) {
             for (AiDetectedPillClassificationDto detectedPill : aiResponse.getDetectedPills()) {
@@ -47,6 +51,8 @@ public class VisionAnalysisService {
                 candidates.add(matched.isEmpty() ? toClassificationCandidate(item) : matched.get(0));
             }
         }
+        log.info("vision request_id={} stage=medicine_enrichment elapsed_ms={}",
+                MDC.get("visionRequestId"), (System.nanoTime() - enrichStarted) / 1_000_000);
         return VisionIdentifyResponseDto.builder()
                 .status(candidates.isEmpty() ? "no_match" : "ok")
                 .candidates(candidates)
@@ -56,6 +62,7 @@ public class VisionAnalysisService {
     @Transactional(readOnly = true)
     public PrescriptionOcrResponseDto scanPrescription(MultipartFile image) {
         AiPrescriptionOcrResponseDto aiResponse = pythonAiClient.scanPrescription(image);
+        long enrichStarted = System.nanoTime();
         List<PrescriptionOcrItemResponseDto> items = new ArrayList<>();
         if (aiResponse != null && aiResponse.getItems() != null) {
             for (AiPrescriptionOcrItemDto item : aiResponse.getItems()) {
@@ -79,6 +86,8 @@ public class VisionAnalysisService {
                         .build());
             }
         }
+        log.info("vision request_id={} stage=prescription_enrichment elapsed_ms={}",
+                MDC.get("visionRequestId"), (System.nanoTime() - enrichStarted) / 1_000_000);
         return PrescriptionOcrResponseDto.builder()
                 .requestId(aiResponse != null ? aiResponse.getRequestId() : null)
                 .status(items.isEmpty() ? "no_match" : "ok")
